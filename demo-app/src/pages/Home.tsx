@@ -183,7 +183,7 @@ export function Home() {
           fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" as const,
         }}>Requested Scopes</p>
         <div style={{ display: "flex", gap: 5, justifyContent: "center", flexWrap: "wrap" }}>
-          {SCOPES.split(" ").map((s) => (
+          {SCOPES.split(" ").map((s: string) => (
             <span key={s} style={{
               padding: "4px 10px", borderRadius: 5,
               background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)",

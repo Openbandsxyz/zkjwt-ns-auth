@@ -129,7 +129,7 @@ export function Callback() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshToken, setRefreshToken] = useState<string | null>(null)
-  const [accessToken, setAccessToken] = useState<string | null>(null)
+  const [_accessToken, setAccessToken] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [tab, setTab] = useState<"profile" | "developer">("profile")
   const exchanged = useRef(false)
