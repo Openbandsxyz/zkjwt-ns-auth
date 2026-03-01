@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { Link, Outlet, useLocation, Navigate } from "react-router-dom"
 import { Settings, Shield, Database } from "lucide-react"
 import { Header } from "@/components/layout/Header"
-import { API_BASE, api } from "@/lib/api"
+import { api } from "@/lib/api"
 import type { UserMe } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
