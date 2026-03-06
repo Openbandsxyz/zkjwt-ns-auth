@@ -49,7 +49,7 @@ export async function generatePKCE() {
 const REACT_SIGNIN_CODE = `// SignInWithNS.tsx
 import { generatePKCE } from "./pkce"
 
-const OAUTH_SERVER = "https://backend-production-c59b.up.railway.app"
+const OAUTH_SERVER = "https://api.nsauth.org"
 const CLIENT_ID   = "your-client-id"
 const REDIRECT_URI = "https://yourapp.com/callback"
 const SCOPES = "openid profile email roles"
@@ -86,7 +86,7 @@ export function SignInWithNS() {
 const REACT_CALLBACK_CODE = `// Callback.tsx
 import { useEffect, useRef, useState } from "react"
 
-const OAUTH_SERVER = "https://backend-production-c59b.up.railway.app"
+const OAUTH_SERVER = "https://api.nsauth.org"
 const CLIENT_ID    = "your-client-id"
 const CLIENT_SECRET = "your-client-secret"
 const REDIRECT_URI  = "https://yourapp.com/callback"
@@ -158,7 +158,7 @@ const NEXTJS_BUTTON_CODE = `// app/components/SignInButton.tsx
 
 import { generatePKCE } from "@/lib/pkce"
 
-const OAUTH_SERVER = "https://backend-production-c59b.up.railway.app"
+const OAUTH_SERVER = "https://api.nsauth.org"
 const CLIENT_ID    = "your-client-id"
 const REDIRECT_URI = "https://yourapp.com/api/auth/callback"
 const SCOPES = "openid profile email roles"
@@ -166,10 +166,15 @@ const SCOPES = "openid profile email roles"
 export function SignInButton() {
   async function handleClick() {
     const { codeVerifier, codeChallenge } = await generatePKCE()
-    sessionStorage.setItem("pkce_code_verifier", codeVerifier)
+
+    // Store verifier in a cookie so the server-side
+    // route handler can read it during token exchange
+    document.cookie =
+      \`pkce_code_verifier=\${codeVerifier}; path=/; SameSite=Lax; Secure\`
 
     const state = crypto.randomUUID()
-    sessionStorage.setItem("oauth_state", state)
+    document.cookie =
+      \`oauth_state=\${state}; path=/; SameSite=Lax; Secure\`
 
     const params = new URLSearchParams({
       response_type: "code",
@@ -195,13 +200,23 @@ export function SignInButton() {
 const NEXTJS_ROUTE_CODE = `// app/api/auth/callback/route.ts
 import { NextRequest, NextResponse } from "next/server"
 
-const OAUTH_SERVER  = "https://backend-production-c59b.up.railway.app"
+const OAUTH_SERVER  = "https://api.nsauth.org"
 const CLIENT_ID     = process.env.NS_CLIENT_ID!
 const CLIENT_SECRET = process.env.NS_CLIENT_SECRET!
 const REDIRECT_URI  = process.env.NS_REDIRECT_URI!
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code")
+  const state = req.nextUrl.searchParams.get("state")
+
+  // Verify state matches
+  const savedState = req.cookies.get("oauth_state")?.value
+  if (state !== savedState) {
+    return NextResponse.json(
+      { error: "State mismatch" }, { status: 400 }
+    )
+  }
+
   const codeVerifier =
     req.cookies.get("pkce_code_verifier")?.value
 
@@ -247,6 +262,9 @@ export async function GET(req: NextRequest) {
     secure: true,
     sameSite: "lax",
   })
+  // Clean up PKCE and state cookies
+  response.cookies.delete("pkce_code_verifier")
+  response.cookies.delete("oauth_state")
 
   return response
 }`
@@ -263,7 +281,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // This single URL auto-configures everything:
       // endpoints, scopes, token signing, JWKS, etc.
       issuer:
-        "https://backend-production-c59b.up.railway.app",
+        "https://api.nsauth.org",
       clientId: process.env.NS_CLIENT_ID!,
       clientSecret: process.env.NS_CLIENT_SECRET!,
       checks: ["pkce", "state"],
@@ -322,7 +340,7 @@ export async function SignInButton() {
 const REFRESH_CODE = `// Refresh an expired access token
 async function refreshAccessToken(refreshToken: string) {
   const res = await fetch(
-    "https://backend-production-c59b.up.railway.app/oauth/token",
+    "https://api.nsauth.org/oauth/token",
     {
       method: "POST",
       headers: {
@@ -361,13 +379,13 @@ const USERINFO_EXAMPLE = `{
 }`
 
 const OIDC_RESPONSE = `{
-  "issuer": "https://backend-production-c59b.up.railway.app",
-  "authorization_endpoint": ".../oauth/authorize",
-  "token_endpoint": ".../oauth/token",
-  "userinfo_endpoint": ".../oauth/userinfo",
-  "jwks_uri": ".../.well-known/jwks.json",
-  "introspection_endpoint": ".../oauth/token/introspect",
-  "revocation_endpoint": ".../oauth/token/revoke",
+  "issuer": "https://api.nsauth.org",
+  "authorization_endpoint": "https://api.nsauth.org/oauth/authorize",
+  "token_endpoint": "https://api.nsauth.org/oauth/token",
+  "userinfo_endpoint": "https://api.nsauth.org/oauth/userinfo",
+  "jwks_uri": "https://api.nsauth.org/.well-known/jwks.json",
+  "introspection_endpoint": "https://api.nsauth.org/oauth/token/introspect",
+  "revocation_endpoint": "https://api.nsauth.org/oauth/token/revoke",
   "response_types_supported": ["code"],
   "grant_types_supported": [
     "client_credentials",
@@ -458,7 +476,7 @@ export function DocsPage() {
             </nav>
           </div>
           <a
-            href="https://github.com"
+            href="https://demo.nsauth.org"
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
@@ -511,7 +529,7 @@ export function DocsPage() {
           <p className="text-muted-foreground mb-6">Get "Sign in with Network School" working in 5 steps:</p>
           <ol className="space-y-4 mb-8">
             {[
-              { title: "Register your app", desc: "Go to the dashboard and create an OAuth app. Save your client_id and client_secret." },
+              { title: "Register your app", desc: "Go to the developer dashboard (app.nsauth.org) and create an OAuth app. Save your client_id and client_secret." },
               { title: "Redirect to authorize", desc: "Send users to /oauth/authorize with your client_id, redirect_uri, scopes, and a PKCE challenge." },
               { title: "User signs in via Discord", desc: "NS OAuth handles Discord login and verifies the user is an NS Discord member." },
               { title: "Exchange code for tokens", desc: "Your callback receives an authorization code. POST it to /oauth/token to get an access_token (and optionally a refresh_token)." },
@@ -538,7 +556,7 @@ export function DocsPage() {
                 <span className="text-muted-foreground">
                   Go to the{" "}
                   <Link to="/dashboard" className="text-foreground underline underline-offset-4">
-                    admin dashboard
+                    developer dashboard
                   </Link>{" "}
                   and click "New App".
                 </span>
@@ -780,6 +798,11 @@ export function DocsPage() {
           <p className="text-sm text-muted-foreground mb-2">
             The <code className="text-foreground bg-secondary px-1 rounded">exchanged</code> ref prevents double-exchange in React StrictMode.
           </p>
+          <div className="bg-secondary/50 border border-border rounded-lg p-4 mb-4 text-sm text-muted-foreground">
+            <strong className="text-foreground">Security note:</strong> This example includes the <code className="text-foreground">client_secret</code> in
+            client-side code for simplicity. In a production SPA, PKCE alone is sufficient — you can omit the client_secret from the token exchange.
+            If you need to use a client_secret, proxy the token exchange through your own backend (see the Next.js example below).
+          </div>
           <CodeBlock code={REACT_CALLBACK_CODE} language="tsx" filename="Callback.tsx" />
 
           {/* Next.js */}
@@ -834,6 +857,7 @@ export function DocsPage() {
           {/* Token Refresh */}
           <SectionHeading id="refresh">Token Refresh</SectionHeading>
           <p className="text-muted-foreground mb-4">
+            Access tokens expire after <strong className="text-foreground">1 hour</strong>. Refresh tokens are valid for <strong className="text-foreground">30 days</strong>.
             Request the <code className="text-foreground bg-secondary px-1 rounded">offline_access</code> scope to receive a refresh token.
             Refresh tokens use rotation &mdash; each use returns a new refresh token and invalidates the old one.
           </p>
@@ -929,7 +953,7 @@ export function DocsPage() {
             <p>
               Need help? Check the{" "}
               <a
-                href="https://demo-app-production-9550.up.railway.app"
+                href="https://demo.nsauth.org"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-foreground underline underline-offset-4"
