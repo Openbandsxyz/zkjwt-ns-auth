@@ -241,19 +241,7 @@ export async function GET(req: NextRequest) {
   )
   const tokens = await tokenRes.json()
 
-  // Fetch user profile
-  const userRes = await fetch(
-    \`\${OAUTH_SERVER}/oauth/userinfo\`,
-    {
-      headers: {
-        Authorization: \`Bearer \${tokens.access_token}\`,
-      },
-    }
-  )
-  const user = await userRes.json()
-
-  // Store session however you like (cookie, DB, etc.)
-  // Then redirect to your app
+  // Store session and redirect to your app
   const response = NextResponse.redirect(
     new URL("/dashboard", req.url)
   )
@@ -833,15 +821,9 @@ export function DocsPage() {
             The easiest way to integrate. Since NS Auth is a standard <strong className="text-foreground">OIDC provider</strong>, NextAuth (Auth.js) can auto-configure
             everything from a single discovery URL — endpoints, scopes, token signing keys, and more. No manual PKCE or callback wiring needed.
           </p>
-          <div className="bg-secondary/50 border border-border rounded-lg p-4 mb-6 text-sm text-muted-foreground">
-            <strong className="text-foreground">What is OIDC?</strong> OpenID Connect is a standard identity layer on top of OAuth 2.0.
-            It adds a discovery endpoint (<code className="text-foreground">/.well-known/openid-configuration</code>) that describes all server capabilities.
-            Auth libraries read this URL and auto-configure themselves — no need to manually specify each endpoint.
-          </div>
-
           <h3 className="text-base font-semibold text-foreground mb-2">1. Configure the provider</h3>
           <p className="text-sm text-muted-foreground mb-2">
-            Just point NextAuth at the <code className="text-foreground bg-secondary px-1 rounded">issuer</code> URL. It fetches <code className="text-foreground bg-secondary px-1 rounded">/.well-known/openid-configuration</code> and auto-discovers all endpoints, signing algorithms, and supported scopes.
+            Just point NextAuth at the <code className="text-foreground bg-secondary px-1 rounded">issuer</code> URL — it auto-discovers all endpoints, signing keys, and scopes via <a href="#oidc" className="text-foreground underline underline-offset-4">OIDC Discovery</a>.
           </p>
           <CodeBlock code={NEXTAUTH_CODE} language="typescript" filename="auth.ts" />
 
@@ -920,10 +902,6 @@ export function DocsPage() {
           {/* OIDC Discovery */}
           <SectionHeading id="oidc">OIDC Discovery</SectionHeading>
           <p className="text-muted-foreground mb-4">
-            <strong className="text-foreground">OpenID Connect (OIDC)</strong> is a standard identity layer on top of OAuth 2.0.
-            While OAuth alone only handles authorization ("this app can access your data"), OIDC adds authentication ("this is who the user is").
-          </p>
-          <p className="text-muted-foreground mb-4">
             NS Auth publishes an{" "}
             <a
               href={`${API_BASE}/.well-known/openid-configuration`}
@@ -933,14 +911,9 @@ export function DocsPage() {
             >
               OIDC discovery document
             </a>{" "}
-            — a single JSON file that describes everything about the server: endpoints, supported scopes, signing algorithms, and where to find the public keys.
+            — a single JSON file that describes all server capabilities: endpoints, supported scopes, signing algorithms, and public keys.
             Any OIDC-compatible library (NextAuth, Passport.js, Spring Security, etc.) can auto-configure itself from this one URL.
           </p>
-          <div className="bg-secondary/50 border border-border rounded-lg p-4 mb-6 text-sm text-muted-foreground">
-            <strong className="text-foreground">TL;DR:</strong> Point your auth library at{" "}
-            <code className="text-foreground bg-secondary px-1 rounded">{API_BASE}/.well-known/openid-configuration</code>{" "}
-            and it handles the rest — no need to manually configure each endpoint.
-          </div>
           <CodeBlock code={OIDC_RESPONSE} language="json" filename="GET /.well-known/openid-configuration" />
           <p className="text-sm text-muted-foreground">
             Access tokens and ID tokens are signed with <strong className="text-foreground">RS256</strong>. Verify them using the public keys from{" "}
