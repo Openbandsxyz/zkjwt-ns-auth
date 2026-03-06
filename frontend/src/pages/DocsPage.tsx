@@ -466,7 +466,7 @@ export function DocsPage() {
           <div className="flex items-center gap-6">
             <Link to="/" className="font-semibold text-foreground flex items-center gap-2">
               <BookOpen className="h-4 w-4" />
-              NS OAuth
+              NS Auth
             </Link>
             <nav className="flex items-center gap-4 text-sm">
               <span className="text-foreground font-medium">Docs</span>
@@ -531,7 +531,7 @@ export function DocsPage() {
             {[
               { title: "Register your app", desc: "Go to the developer dashboard (app.nsauth.org) and create an OAuth app. Save your client_id and client_secret." },
               { title: "Redirect to authorize", desc: "Send users to /oauth/authorize with your client_id, redirect_uri, scopes, and a PKCE challenge." },
-              { title: "User signs in via Discord", desc: "NS OAuth handles Discord login and verifies the user is an NS Discord member." },
+              { title: "User signs in via Discord", desc: "NS Auth handles Discord login and verifies the user is an NS Discord member." },
               { title: "Exchange code for tokens", desc: "Your callback receives an authorization code. POST it to /oauth/token to get an access_token (and optionally a refresh_token)." },
               { title: "Fetch user data", desc: "Call /oauth/userinfo with the access token to get the user's profile, roles, and other claims." },
             ].map((step, i) => (
@@ -585,7 +585,7 @@ export function DocsPage() {
           {/* Authorization Flow */}
           <SectionHeading id="auth-flow">Authorization Flow</SectionHeading>
           <p className="text-muted-foreground mb-4">
-            NS OAuth uses the <strong className="text-foreground">Authorization Code flow with PKCE</strong> (RFC 7636).
+            NS Auth uses the <strong className="text-foreground">Authorization Code flow with PKCE</strong> (RFC 7636).
             PKCE is required for all clients.
           </p>
           <div className="bg-secondary/50 border border-border rounded-lg p-4 mb-6 text-sm text-muted-foreground">
@@ -830,7 +830,7 @@ export function DocsPage() {
             <Zap className="h-5 w-5 text-muted-foreground" /> NextAuth / Auth.js (Recommended)
           </SectionHeading>
           <p className="text-muted-foreground mb-4">
-            The easiest way to integrate. Since NS OAuth is a standard <strong className="text-foreground">OIDC provider</strong>, NextAuth (Auth.js) can auto-configure
+            The easiest way to integrate. Since NS Auth is a standard <strong className="text-foreground">OIDC provider</strong>, NextAuth (Auth.js) can auto-configure
             everything from a single discovery URL — endpoints, scopes, token signing keys, and more. No manual PKCE or callback wiring needed.
           </p>
           <div className="bg-secondary/50 border border-border rounded-lg p-4 mb-6 text-sm text-muted-foreground">
@@ -924,7 +924,7 @@ export function DocsPage() {
             While OAuth alone only handles authorization ("this app can access your data"), OIDC adds authentication ("this is who the user is").
           </p>
           <p className="text-muted-foreground mb-4">
-            NS OAuth publishes an{" "}
+            NS Auth publishes an{" "}
             <a
               href={`${API_BASE}/.well-known/openid-configuration`}
               target="_blank"

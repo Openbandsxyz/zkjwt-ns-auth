@@ -29,7 +29,7 @@ const STEPS = [
   {
     num: "02",
     title: "Authenticate",
-    description: "Redirect users to NS OAuth. They sign in via Discord and approve scopes.",
+    description: "Redirect users to NS Auth. They sign in via Discord and approve scopes.",
     icon: Users,
   },
   {
@@ -70,24 +70,6 @@ const SCOPES = [
   { scope: "roles", claims: "roles [ ]", note: "Discord server roles (live)" },
   { scope: "date_joined", claims: "date_joined, boosting_since", note: "Membership dates" },
   { scope: "offline_access", claims: "refresh_token", note: "Long-lived sessions" },
-]
-
-const CODE_LINES = [
-  { text: 'import { generatePKCE } from "./pkce"', dim: true },
-  { text: '' },
-  { text: 'const { codeVerifier, codeChallenge }' },
-  { text: '  = await generatePKCE()' },
-  { text: '' },
-  { text: 'const params = new URLSearchParams({' },
-  { text: '  response_type: "code",', dim: true },
-  { text: '  client_id: YOUR_CLIENT_ID,', dim: true },
-  { text: '  scope: "openid profile email roles",', highlight: true },
-  { text: '  code_challenge: codeChallenge,', dim: true },
-  { text: '  code_challenge_method: "S256",', dim: true },
-  { text: '})' },
-  { text: '' },
-  { text: 'window.location.href =' },
-  { text: '  `https://api.nsauth.org/oauth/authorize?${params}`', highlight: true },
 ]
 
 const USERINFO_JSON = `{
@@ -138,7 +120,7 @@ export function LandingPage() {
           <div className="flex items-center gap-8">
             <Link to="/" className="font-semibold flex items-center gap-2">
               <Shield className="h-4 w-4" />
-              NS OAuth
+              NS Auth
             </Link>
             <nav className="hidden sm:flex items-center gap-5 text-sm text-[#666]">
               <Link to="/docs" className="hover:text-[#0a0a0a] transition-colors">Docs</Link>
@@ -155,15 +137,15 @@ export function LandingPage() {
       </header>
 
       {/* ── Hero ── */}
-      <section className="pt-24 pb-20 sm:pt-36 sm:pb-28 px-6">
-        <div className="max-w-[1200px] mx-auto">
+      <section className="pt-24 pb-20 sm:pt-32 sm:pb-28 px-6">
+        <div className="max-w-[1200px] mx-auto grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          {/* Left — headline */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: [0.25, 1, 0.5, 1] }}
-            className="max-w-3xl"
           >
-            <h1 className="text-[clamp(2.25rem,5.5vw,4.25rem)] font-bold tracking-tight leading-[1.08] mb-6">
+            <h1 className="text-[clamp(2.25rem,5.5vw,4rem)] font-bold tracking-tight leading-[1.08] mb-6">
               Identity provider for
               <br />
               Network School
@@ -184,6 +166,61 @@ export function LandingPage() {
                   <ExternalLink className="h-3.5 w-3.5" />
                 </button>
               </a>
+            </div>
+          </motion.div>
+
+          {/* Right — logo mark */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, ease: [0.25, 1, 0.5, 1], delay: 0.2 }}
+            className="hidden lg:flex items-center justify-center"
+          >
+            <div className="relative w-72 h-72 flex items-center justify-center">
+              {/* Outer ring */}
+              <div className="absolute inset-0 rounded-full border border-gray-200" />
+              <div className="absolute inset-4 rounded-full border border-gray-100" />
+              {/* Center shield */}
+              <div className="w-32 h-32 bg-[#0a0a0a] rounded-3xl flex items-center justify-center shadow-lg">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.2" strokeLinejoin="round">
+                  <path d="M12 2L4 6v5c0 5.55 3.41 10.74 8 12 4.59-1.26 8-6.45 8-12V6l-8-4z" />
+                  <circle cx="12" cy="10" r="2.5" strokeLinecap="round" />
+                  <path d="M12 12.5v4" strokeLinecap="round" />
+                </svg>
+              </div>
+              {/* Floating labels */}
+              <motion.div
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.6 }}
+                className="absolute top-8 -left-4 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-[#0a0a0a] shadow-sm"
+              >
+                OAuth 2.0
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.7 }}
+                className="absolute top-16 -right-6 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-[#0a0a0a] shadow-sm"
+              >
+                PKCE + RS256
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.8 }}
+                className="absolute bottom-16 -left-8 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-[#0a0a0a] shadow-sm"
+              >
+                Live Discord Data
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.9 }}
+                className="absolute bottom-6 -right-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-[#0a0a0a] shadow-sm"
+              >
+                OIDC Discovery
+              </motion.div>
             </div>
           </motion.div>
         </div>
@@ -250,50 +287,46 @@ export function LandingPage() {
 
       <div className="max-w-[1200px] mx-auto px-6"><hr className="border-gray-200" /></div>
 
-      {/* ── Code + Userinfo side by side ── */}
+      {/* ── What you get back ── */}
       <section className="py-20 sm:py-28 px-6">
         <div className="max-w-[1200px] mx-auto">
-          <Reveal>
-            <p className="text-sm font-medium text-[#999] uppercase tracking-wider mb-3">Integration</p>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">Simple to implement</h2>
-            <p className="text-[#666] max-w-lg mb-12 leading-relaxed">
-              Redirect users to authenticate, exchange the code, and get back structured user data. Works with any framework.
-            </p>
-          </Reveal>
-
-          <div className="grid lg:grid-cols-2 gap-6">
-            {/* Sign-in code */}
-            <Reveal delay={0.05}>
-              <div className="rounded-xl border border-gray-200 bg-[#fafafa] overflow-hidden h-full">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            {/* Left — userinfo response */}
+            <Reveal>
+              <div className="rounded-xl border border-gray-200 bg-[#fafafa] overflow-hidden">
                 <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-200 bg-white">
-                  <Code2 className="h-3.5 w-3.5 text-[#999]" />
-                  <span className="text-xs text-[#999] font-medium">sign-in-with-ns.ts</span>
+                  <span className="text-xs font-mono font-medium text-emerald-600">GET</span>
+                  <span className="text-xs text-[#999] font-medium">/oauth/userinfo</span>
                 </div>
-                <div className="p-5 font-mono text-[12.5px] leading-[1.8] overflow-x-auto">
-                  {CODE_LINES.map((line, i) => (
-                    <div key={i} className="flex">
-                      <span className="w-6 text-right mr-4 text-[#ccc] select-none text-[11px]">{i + 1}</span>
-                      <span className={
-                        line.highlight ? "text-[#0a0a0a] font-medium" :
-                        line.dim ? "text-[#999]" : "text-[#444]"
-                      }>
-                        {line.text || "\u00A0"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <pre className="p-5 font-mono text-[12.5px] leading-[1.7] text-[#444] overflow-x-auto whitespace-pre">{USERINFO_JSON}</pre>
               </div>
             </Reveal>
 
-            {/* Userinfo response */}
-            <Reveal delay={0.15}>
-              <div className="rounded-xl border border-gray-200 bg-[#fafafa] overflow-hidden h-full">
-                <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-200 bg-white">
-                  <span className="text-xs font-mono font-medium text-emerald-600">GET</span>
-                  <span className="text-xs text-[#999] font-medium">/oauth/userinfo response</span>
-                </div>
-                <pre className="p-5 font-mono text-[12.5px] leading-[1.8] text-[#444] overflow-x-auto whitespace-pre">{USERINFO_JSON}</pre>
-              </div>
+            {/* Right — description */}
+            <Reveal delay={0.1}>
+              <p className="text-sm font-medium text-[#999] uppercase tracking-wider mb-3">What you get back</p>
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">Structured user data</h2>
+              <p className="text-[#666] leading-relaxed mb-6">
+                One API call returns everything — identity, email, Discord profile, server roles, membership dates, and badges. All scope-gated and consent-driven.
+              </p>
+              <ul className="space-y-3 text-sm text-[#666]">
+                <li className="flex items-start gap-3">
+                  <span className="text-[#0a0a0a] font-semibold shrink-0 w-5">1.</span>
+                  User authenticates via Discord
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#0a0a0a] font-semibold shrink-0 w-5">2.</span>
+                  Exchange code for an access token
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#0a0a0a] font-semibold shrink-0 w-5">3.</span>
+                  Call <code className="bg-[#f5f5f5] px-1.5 py-0.5 rounded text-[#0a0a0a] text-xs">/oauth/userinfo</code> with the token
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#0a0a0a] font-semibold shrink-0 w-5">4.</span>
+                  Get back JSON with all granted claims
+                </li>
+              </ul>
             </Reveal>
           </div>
         </div>
@@ -360,7 +393,7 @@ export function LandingPage() {
         <div className="max-w-[1200px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[#999]">
           <div className="flex items-center gap-2">
             <Shield className="h-3.5 w-3.5" />
-            <span className="font-medium text-[#666]">NS OAuth</span>
+            <span className="font-medium text-[#666]">NS Auth</span>
           </div>
           <nav className="flex items-center gap-5 text-[13px]">
             <Link to="/docs" className="hover:text-[#0a0a0a] transition-colors">Docs</Link>

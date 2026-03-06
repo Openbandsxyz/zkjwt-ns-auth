@@ -434,7 +434,7 @@ export function Callback() {
             )}
             {userInfo?.date_joined && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 13, color: "#71717a" }}>NS OAuth since</span>
+                <span style={{ fontSize: 13, color: "#71717a" }}>NS Auth since</span>
                 <span style={{ fontSize: 14, fontWeight: 600, color: "#e4e4e7" }}>{fmtDate(userInfo.date_joined)}</span>
               </div>
             )}
@@ -758,7 +758,7 @@ export function Callback() {
           textAlign: "center", marginTop: 32,
           fontSize: 11, color: "#27272a", letterSpacing: "0.02em",
         }}>
-          Powered by NS OAuth
+          Powered by NS Auth
         </div>
       </div>
     </div>

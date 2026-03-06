@@ -286,7 +286,7 @@ export function Home() {
         fontSize: 12, color: "#27272a",
         flexShrink: 0,
       }}>
-        Powered by NS OAuth
+        Powered by NS Auth
       </footer>
     </div>
   )
