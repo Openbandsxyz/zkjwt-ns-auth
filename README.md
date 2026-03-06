@@ -496,20 +496,6 @@ railway variables --set "OAUTH_RSA_PUBLIC_KEY=$PUB" --service backend
 
 The backend auto-detects whether to use env var keys or file-based keys (`backend/keys/`).
 
-### Troubleshooting
-
-| Problem | Symptom | Fix |
-|---------|---------|-----|
-| Ran `railway up` from subdirectory | "Could not find root directory" | Always run from repo root |
-| Missing `rootDirectory` | "Could not determine how to build" | Set via GraphQL API (see above) |
-| Node version too old | `EBADENGINE` warnings, build fails | Set `NIXPACKS_NODE_VERSION=20` |
-| Stale `package-lock.json` | `npm ci` fails: "Missing from lock file" | Delete lock + node_modules, run `npm install` |
-| Session cookie not sent | Consent "Allow" does nothing | Already handled: `SameSite=None; Secure=True` auto-detected for HTTPS |
-| Old code after deploy | New endpoints return 404 | Check `railway deployment list` — deploy may have failed |
-| CORS errors | Browser blocks requests | Update `OAUTH_CORS_ORIGINS` with all frontend/client URLs |
-| Discord login loop | Keeps redirecting to Discord after login | Likely on root domain (`nsauth.org`) — auth only works on `app.nsauth.org` due to separate localStorage per origin. Layout auto-redirects. |
-
----
 
 ## Useful Commands
 
