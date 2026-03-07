@@ -22,10 +22,10 @@ const STEPS: Step[] = [
     { from: 1, to: 1, label: "Verify NS membership", sublabel: "", color: "#0a0a0a" },
     { from: 1, to: 0, label: "Redirect with ?code=…", sublabel: "", color: "#0a0a0a" },
     { from: 0, to: 1, label: "POST /oauth/token", sublabel: "code + client_secret + code_verifier", color: "#0a0a0a" },
-    { from: 1, to: 0, label: "access_token + id_token", sublabel: "+ refresh_token", color: "#16a34a" },
+    { from: 1, to: 0, label: "access_token + id_token", sublabel: "+ refresh_token", color: "#34d399" },
     { from: 0, to: 1, label: "GET /oauth/userinfo", sublabel: "Bearer token", color: "#0a0a0a" },
     { from: 1, to: 2, label: "Fetch live profile & roles", sublabel: "5-min cache", color: "#5865F2" },
-    { from: 1, to: 0, label: "User claims JSON", sublabel: "name, email, roles, avatar…", color: "#16a34a" },
+    { from: 1, to: 0, label: "User claims JSON", sublabel: "name, email, roles, avatar…", color: "#34d399" },
 ]
 
 export function SequenceDiagram() {

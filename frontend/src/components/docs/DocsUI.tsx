@@ -41,9 +41,9 @@ export function Callout({
     children: ReactNode
 }) {
     const styles = {
-        info: "border-blue-200 bg-blue-50/50 text-blue-900/80",
-        warning: "border-amber-200 bg-amber-50/50 text-amber-900/80",
-        tip: "border-emerald-200 bg-emerald-50/50 text-emerald-900/80",
+        info: "border-border bg-secondary/30 text-muted-foreground",
+        warning: "border-border bg-secondary/30 text-muted-foreground",
+        tip: "border-border bg-secondary/30 text-muted-foreground",
     }
     const icons = {
         info: "ℹ",
@@ -72,11 +72,11 @@ export function EndpointRow({
 }) {
     const color =
         method === "GET"
-            ? "text-emerald-600 bg-emerald-50"
+            ? "text-foreground bg-secondary"
             : method === "POST"
-                ? "text-blue-600 bg-blue-50"
+                ? "text-foreground bg-secondary"
                 : method === "DELETE"
-                    ? "text-red-600 bg-red-50"
+                    ? "text-foreground bg-secondary"
                     : "text-muted-foreground bg-secondary"
 
     return (
@@ -134,6 +134,8 @@ export function FileRow({
     badge,
     desc,
     code,
+    lang,
+    defaultOpen = false,
 }: {
     n: number
     file: string
@@ -141,8 +143,9 @@ export function FileRow({
     desc: string
     code: string
     lang: string
+    defaultOpen?: boolean
 }) {
-    const [open, setOpen] = useState(false)
+    const [open, setOpen] = useState(defaultOpen)
     const [copied, setCopied] = useState(false)
     const lineCount = code.trim().split("\n").length
 
@@ -153,32 +156,17 @@ export function FileRow({
         setTimeout(() => setCopied(false), 2000)
     }
 
-    const badgeColors: Record<string, string> = {
-        core: "bg-emerald-100 text-emerald-700",
-        env: "bg-amber-100 text-amber-700",
-        api: "bg-blue-100 text-blue-700",
-        ui: "bg-purple-100 text-purple-700",
-        guard: "bg-red-100 text-red-700",
-        util: "bg-cyan-100 text-cyan-700",
-        page: "bg-indigo-100 text-indigo-700",
-    }
-
     return (
         <div className="border-b border-border last:border-b-0">
             <button
                 onClick={() => setOpen(!open)}
-                className="w-full flex items-center gap-3 px-5 py-3 text-left cursor-pointer hover:bg-secondary/30 transition-colors"
+                className="w-full flex items-center gap-3 px-5 py-3.5 text-left cursor-pointer hover:bg-secondary/30 transition-colors group"
             >
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500 text-white text-[11px] font-bold flex items-center justify-center">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-foreground text-background text-[11px] font-bold flex items-center justify-center">
                     {n}
                 </span>
-                <ChevronDown
-                    className={`h-3 w-3 text-muted-foreground/40 transition-transform duration-200 flex-shrink-0 ${open ? "rotate-0" : "-rotate-90"}`}
-                />
                 <code className="text-[13px] font-mono text-foreground font-medium truncate">{file}</code>
-                <span
-                    className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0 ${badgeColors[badge] || "bg-secondary text-muted-foreground"}`}
-                >
+                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0 bg-secondary text-muted-foreground">
                     {badge}
                 </span>
                 <span className="text-xs text-muted-foreground truncate hidden sm:block flex-1">{desc}</span>
@@ -189,14 +177,18 @@ export function FileRow({
                     onClick={handleCopy}
                     className="text-[10px] text-muted-foreground/50 hover:text-foreground transition-colors flex-shrink-0"
                 >
-                    {copied ? "Copied ✓" : "Copy"}
+                    {copied ? "Copied" : "Copy"}
+                </span>
+                <span className={`text-[10px] font-medium flex items-center gap-1 flex-shrink-0 transition-colors ${open ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"}`}>
+                    {open ? "Hide" : "View"}
+                    <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
+                    />
                 </span>
             </button>
             {open && (
                 <div className="px-5 pb-4">
-                    <div className="rounded-lg overflow-hidden">
-                        <CodeBlock code={code} language="" filename="" hideHeader />
-                    </div>
+                    <CodeBlock code={code} language={lang} hideHeader />
                 </div>
             )}
         </div>

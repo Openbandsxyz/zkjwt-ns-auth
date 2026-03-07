@@ -50,21 +50,16 @@ export function DocsPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Header ── */}
-      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="max-w-[1200px] mx-auto flex items-center justify-between h-14 px-5">
-          <div className="flex items-center gap-6">
-            <Link to="/" className="font-semibold text-foreground flex items-center gap-2">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-200/60">
+        <div className="max-w-[1200px] mx-auto flex items-center justify-between h-14 px-6">
+          <div className="flex items-center gap-8">
+            <Link to="/" className="font-semibold flex items-center gap-2">
               <BookOpen className="h-4 w-4" />
               NS Auth
             </Link>
-            <nav className="hidden sm:flex items-center gap-1">
-              <span className="px-3 py-1.5 rounded-md bg-secondary text-sm font-medium text-foreground">Docs</span>
-              <Link
-                to="/dashboard"
-                className="px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-              >
-                Dashboard
-              </Link>
+            <nav className="hidden sm:flex items-center gap-5 text-sm text-[#666]">
+              <span className="text-[#0a0a0a] font-medium">Docs</span>
+              <Link to="/dashboard" className="hover:text-[#0a0a0a] transition-colors">Dashboard</Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">
@@ -72,7 +67,7 @@ export function DocsPage() {
               href="/llms.txt"
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 text-xs font-medium text-[#666] hover:text-[#0a0a0a] hover:bg-gray-50 transition-colors"
             >
               <FileText className="h-3 w-3" />
               llms.txt
@@ -81,7 +76,7 @@ export function DocsPage() {
               href="https://demo.nsauth.org"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 text-xs font-medium text-[#666] hover:text-[#0a0a0a] hover:bg-gray-50 transition-colors"
             >
               Demo <ExternalLink className="h-3 w-3" />
             </a>
