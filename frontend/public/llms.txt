@@ -1,0 +1,565 @@
+# NS Auth — Developer Documentation
+
+NS Auth is an OAuth 2.0 provider for Network School.
+It lets apps verify NS Discord membership, access user roles, and fetch profile data through standard OAuth 2.0 flows.
+
+Base URL: `https://api.nsauth.org`
+Dashboard: `https://app.nsauth.org`
+Demo: `https://demo.nsauth.org`
+
+---
+
+## Quick Start
+
+1. **Register your app** — Go to the developer dashboard (app.nsauth.org) and create an OAuth app. Save your `client_id` and `client_secret`.
+2. **Redirect to authorize** — Send users to `/oauth/authorize` with your `client_id`, `redirect_uri`, scopes, and a PKCE challenge.
+3. **User signs in via Discord** — NS Auth handles Discord login and verifies the user is an NS Discord member.
+4. **Exchange code for tokens** — Your callback receives an authorization code. POST it to `/oauth/token` to get an `access_token` (and optionally a `refresh_token`).
+5. **Fetch user data** — Call `/oauth/userinfo` with the access token to get the user's profile, roles, and other claims.
+
+---
+
+## Register Your App
+
+1. Go to the [developer dashboard](https://app.nsauth.org/dashboard) and click "New App".
+2. Fill in your app name, description, and add your callback URL(s) as redirect URIs.
+3. Select the scopes your app needs (e.g. `openid profile email roles`).
+4. Copy your `client_id` and `client_secret`. The secret is shown only once.
+
+---
+
+## Authorization Flow
+
+NS Auth uses the **Authorization Code flow with PKCE** (RFC 7636).
+
+### What is PKCE?
+
+Proof Key for Code Exchange (pronounced "pixy") prevents a class of attacks where someone intercepts the authorization code during the redirect back to your app. Instead of relying solely on a client secret, your app generates a random `code_verifier` string and sends a SHA-256 hash of it (`code_challenge`) in the authorize request. When exchanging the code for tokens, you send the original `code_verifier` — the server hashes it and checks it matches the challenge. An attacker who intercepts the code can't use it because they don't have the verifier.
+
+### Flow Steps
+
+1. Your app generates a PKCE `code_verifier` + `code_challenge` (S256)
+2. Redirect user to `/oauth/authorize` with challenge
+   - User authenticates via Discord
+   - NS verifies Discord server membership
+3. Redirect back to your app with `?code=...&state=...`
+4. POST code + code_verifier to `/oauth/token`
+5. Receive `access_token` (+ `refresh_token` if `offline_access` scope)
+6. GET `/oauth/userinfo` with Bearer token
+
+---
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/oauth/authorize` | Start authorization code flow |
+| POST | `/oauth/token` | Exchange code/credentials for tokens |
+| GET | `/oauth/userinfo` | Get user claims (Bearer token required) |
+| POST | `/oauth/token/introspect` | Check if a token is active |
+| POST | `/oauth/token/revoke` | Revoke an access token |
+| GET | `/.well-known/openid-configuration` | Server discovery document |
+| GET | `/.well-known/jwks.json` | Public RSA keys for token verification |
+
+### Authorize Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `response_type` | Yes | Must be `"code"` |
+| `client_id` | Yes | Your app's client ID |
+| `redirect_uri` | Yes | Must match a registered redirect URI |
+| `scope` | No | Space-separated scopes (default: `"openid"`) |
+| `state` | Recommended | CSRF protection — random string, verify on callback |
+| `code_challenge` | Yes | PKCE challenge (base64url-encoded SHA-256 hash) |
+| `code_challenge_method` | Yes | Must be `"S256"` |
+
+### Token Request Parameters
+
+POST to `/oauth/token` with `Content-Type: application/x-www-form-urlencoded`
+
+| Parameter | Description |
+|-----------|-------------|
+| `grant_type` | `"authorization_code"`, `"refresh_token"`, or `"client_credentials"` |
+| `code` | Authorization code from callback |
+| `redirect_uri` | Must match the authorize request |
+| `client_id` | Your app's client ID |
+| `client_secret` | Your app's client secret |
+| `code_verifier` | PKCE code verifier (original random string) |
+
+---
+
+## Scopes & Claims
+
+Request scopes in the authorize URL. The userinfo endpoint returns claims based on the granted scopes. Discord-sourced claims are fetched live with a 5-minute cache.
+
+| Scope | Claims | Source |
+|-------|--------|--------|
+| `openid` | `sub` | System |
+| `email` | `email`, `email_verified` | Discord OAuth |
+| `profile` | `name`, `picture`, `discord_username`, `banner_url`, `accent_color`, `public_badges` | Discord API (live) |
+| `roles` | `roles` (array of `{id, name}`) | Discord API (live) |
+| `date_joined` | `date_joined`, `discord_joined_at`, `boosting_since` | Discord API (live) |
+| `offline_access` | (grants refresh token) | System |
+
+### Example /oauth/userinfo Response
+
+```json
+{
+  "sub": "3eda7aa4-9114-4a6a-8f68-c91d0553c3c9",
+  "email": "alice@networkschool.com",
+  "email_verified": true,
+  "name": "Alice",
+  "picture": "https://cdn.discordapp.com/avatars/...",
+  "discord_username": "alice",
+  "roles": [
+    { "id": "1234567890", "name": "Cohort 5" },
+    { "id": "0987654321", "name": "Builder" }
+  ],
+  "date_joined": "2024-06-15T10:30:00Z",
+  "discord_joined_at": "2024-06-14T08:00:00Z",
+  "boosting_since": null,
+  "public_badges": ["ActiveDeveloper"]
+}
+```
+
+---
+
+## React Integration
+
+Three files to add "Sign in with Network School" to a React app.
+
+### 1. PKCE Helper
+
+```typescript
+// pkce.ts — Generate PKCE S256 challenge
+export async function generatePKCE() {
+  const array = new Uint8Array(32)
+  crypto.getRandomValues(array)
+  const codeVerifier = btoa(String.fromCharCode(...array))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "")
+
+  const encoder = new TextEncoder()
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    encoder.encode(codeVerifier)
+  )
+  const codeChallenge = btoa(
+    String.fromCharCode(...new Uint8Array(digest))
+  )
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "")
+
+  return { codeVerifier, codeChallenge }
+}
+```
+
+### 2. Sign-in Button
+
+```tsx
+// SignInWithNS.tsx
+import { generatePKCE } from "./pkce"
+
+const OAUTH_SERVER = "https://api.nsauth.org"
+const CLIENT_ID   = "your-client-id"
+const REDIRECT_URI = "https://yourapp.com/callback"
+const SCOPES = "openid profile email roles"
+
+export function SignInWithNS() {
+  async function handleSignIn() {
+    const { codeVerifier, codeChallenge } = await generatePKCE()
+    sessionStorage.setItem("pkce_code_verifier", codeVerifier)
+
+    const state = crypto.randomUUID()
+    sessionStorage.setItem("oauth_state", state)
+
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      scope: SCOPES,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
+    })
+
+    window.location.href =
+      `${OAUTH_SERVER}/oauth/authorize?${params}`
+  }
+
+  return (
+    <button onClick={handleSignIn}>
+      Sign in with Network School
+    </button>
+  )
+}
+```
+
+### 3. Callback Page
+
+> **Security note:** This example includes the `client_secret` in client-side code for simplicity. In a production SPA, PKCE alone is sufficient — you can omit the client_secret from the token exchange. If you need to use a client_secret, proxy the token exchange through your own backend (see the Next.js example below).
+
+```tsx
+// Callback.tsx
+import { useEffect, useRef, useState } from "react"
+
+const OAUTH_SERVER = "https://api.nsauth.org"
+const CLIENT_ID    = "your-client-id"
+const CLIENT_SECRET = "your-client-secret"
+const REDIRECT_URI  = "https://yourapp.com/callback"
+
+export function Callback() {
+  const [user, setUser] = useState(null)
+  const exchanged = useRef(false)
+
+  useEffect(() => {
+    async function exchange() {
+      // Guard against React StrictMode double-mount
+      if (exchanged.current) return
+      exchanged.current = true
+
+      const params = new URLSearchParams(window.location.search)
+      const code  = params.get("code")
+      const state = params.get("state")
+
+      // Verify state matches
+      if (state !== sessionStorage.getItem("oauth_state")) {
+        throw new Error("State mismatch")
+      }
+
+      const codeVerifier =
+        sessionStorage.getItem("pkce_code_verifier")
+
+      // Exchange code for tokens
+      const tokenRes = await fetch(
+        `${OAUTH_SERVER}/oauth/token`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            grant_type: "authorization_code",
+            code,
+            redirect_uri: REDIRECT_URI,
+            client_id: CLIENT_ID,
+            client_secret: CLIENT_SECRET,
+            code_verifier: codeVerifier,
+          }),
+        }
+      )
+      const tokens = await tokenRes.json()
+
+      // Fetch user profile
+      const userRes = await fetch(
+        `${OAUTH_SERVER}/oauth/userinfo`,
+        {
+          headers: {
+            Authorization: `Bearer ${tokens.access_token}`,
+          },
+        }
+      )
+      setUser(await userRes.json())
+    }
+
+    exchange()
+  }, [])
+
+  if (!user) return <p>Signing in...</p>
+  return <pre>{JSON.stringify(user, null, 2)}</pre>
+}
+```
+
+---
+
+## Next.js Integration
+
+For Next.js App Router, use a client-side sign-in button with an API route handler for the server-side token exchange.
+
+### 1. Client-side Sign-in Button
+
+Uses the same PKCE helper from the React section. Copy `pkce.ts` into your `lib/` folder.
+
+```tsx
+// app/components/SignInButton.tsx
+"use client"
+
+import { generatePKCE } from "@/lib/pkce"
+
+const OAUTH_SERVER = "https://api.nsauth.org"
+const CLIENT_ID    = "your-client-id"
+const REDIRECT_URI = "https://yourapp.com/api/auth/callback"
+const SCOPES = "openid profile email roles"
+
+export function SignInButton() {
+  async function handleClick() {
+    const { codeVerifier, codeChallenge } = await generatePKCE()
+
+    // Store verifier in a cookie so the server-side
+    // route handler can read it during token exchange
+    document.cookie =
+      `pkce_code_verifier=${codeVerifier}; path=/; SameSite=Lax; Secure`
+
+    const state = crypto.randomUUID()
+    document.cookie =
+      `oauth_state=${state}; path=/; SameSite=Lax; Secure`
+
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      scope: SCOPES,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
+    })
+
+    window.location.href =
+      `${OAUTH_SERVER}/oauth/authorize?${params}`
+  }
+
+  return (
+    <button onClick={handleClick}>
+      Sign in with Network School
+    </button>
+  )
+}
+```
+
+### 2. API Route Handler (Server-side)
+
+Keep your client_secret on the server. The route handler exchanges the code and creates a session.
+
+```typescript
+// app/api/auth/callback/route.ts
+import { NextRequest, NextResponse } from "next/server"
+
+const OAUTH_SERVER  = "https://api.nsauth.org"
+const CLIENT_ID     = process.env.NS_CLIENT_ID!
+const CLIENT_SECRET = process.env.NS_CLIENT_SECRET!
+const REDIRECT_URI  = process.env.NS_REDIRECT_URI!
+
+export async function GET(req: NextRequest) {
+  const code = req.nextUrl.searchParams.get("code")
+  const state = req.nextUrl.searchParams.get("state")
+
+  // Verify state matches
+  const savedState = req.cookies.get("oauth_state")?.value
+  if (state !== savedState) {
+    return NextResponse.json(
+      { error: "State mismatch" }, { status: 400 }
+    )
+  }
+
+  const codeVerifier =
+    req.cookies.get("pkce_code_verifier")?.value
+
+  // Exchange code for tokens (server-side)
+  const tokenRes = await fetch(
+    `${OAUTH_SERVER}/oauth/token`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: code!,
+        redirect_uri: REDIRECT_URI,
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        ...(codeVerifier && { code_verifier: codeVerifier }),
+      }),
+    }
+  )
+  const tokens = await tokenRes.json()
+
+  // Store session and redirect to your app
+  const response = NextResponse.redirect(
+    new URL("/dashboard", req.url)
+  )
+  response.cookies.set("session", tokens.access_token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+  })
+  // Clean up PKCE and state cookies
+  response.cookies.delete("pkce_code_verifier")
+  response.cookies.delete("oauth_state")
+
+  return response
+}
+```
+
+---
+
+## NextAuth / Auth.js (Recommended)
+
+The easiest way to integrate. NextAuth (Auth.js) can auto-configure everything from our discovery URL — endpoints, scopes, token signing keys, and more. No manual PKCE or callback wiring needed.
+
+### 1. Configure the Provider
+
+Just point NextAuth at the `issuer` URL — it auto-discovers all endpoints, signing keys, and scopes via the discovery endpoint.
+
+```typescript
+// auth.ts — NextAuth / Auth.js configuration
+import NextAuth from "next-auth"
+
+export const { handlers, signIn, signOut, auth } = NextAuth({
+  providers: [
+    {
+      id: "network-school",
+      name: "Network School",
+      type: "oidc",
+      issuer: "https://api.nsauth.org",
+      clientId: process.env.NS_CLIENT_ID!,
+      clientSecret: process.env.NS_CLIENT_SECRET!,
+      checks: ["pkce", "state"],
+      profile(profile) {
+        return {
+          id: profile.sub,
+          name: profile.name,
+          email: profile.email,
+          image: profile.picture,
+        }
+      },
+    },
+  ],
+})
+```
+
+### 2. Environment Variables
+
+```bash
+# .env.local
+NS_CLIENT_ID=your-client-id
+NS_CLIENT_SECRET=your-client-secret
+NEXTAUTH_URL=https://yourapp.com
+NEXTAUTH_SECRET=generate-a-random-secret
+```
+
+### 3. API Route
+
+```typescript
+// app/api/auth/[...nextauth]/route.ts
+import { handlers } from "@/auth"
+export const { GET, POST } = handlers
+```
+
+### 4. Sign-in Button
+
+```tsx
+// app/components/SignInButton.tsx
+import { signIn, signOut, auth } from "@/auth"
+
+export async function SignInButton() {
+  const session = await auth()
+
+  if (session?.user) {
+    return (
+      <div>
+        <p>Welcome, {session.user.name}</p>
+        <form action={async () => {
+          "use server"
+          await signOut()
+        }}>
+          <button>Sign out</button>
+        </form>
+      </div>
+    )
+  }
+
+  return (
+    <form action={async () => {
+      "use server"
+      await signIn("network-school")
+    }}>
+      <button>Sign in with Network School</button>
+    </form>
+  )
+}
+```
+
+---
+
+## Token Refresh
+
+Access tokens expire after **1 hour**. Refresh tokens are valid for **30 days**. Request the `offline_access` scope to receive a refresh token. Refresh tokens use rotation — each use returns a new refresh token and invalidates the old one.
+
+```typescript
+// Refresh an expired access token
+async function refreshAccessToken(refreshToken: string) {
+  const res = await fetch(
+    "https://api.nsauth.org/oauth/token",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: "your-client-id",
+        client_secret: "your-client-secret",
+      }),
+    }
+  )
+
+  const tokens = await res.json()
+  // tokens.access_token  — new access token
+  // tokens.refresh_token — new refresh token (rotation)
+  return tokens
+}
+```
+
+---
+
+## Error Handling
+
+The token endpoint returns errors as JSON with `error` and `error_description` fields.
+
+| Error | Status | Description |
+|-------|--------|-------------|
+| `invalid_client` | 401 | Unknown client_id or wrong client_secret |
+| `invalid_grant` | 400 | Authorization code expired, already used, or PKCE mismatch |
+| `invalid_request` | 400 | Missing required parameters or redirect_uri mismatch |
+| `access_denied` | — | User denied consent (returned as query param on redirect) |
+| `not_ns_member` | — | User is not a member of the NS Discord server |
+| `invalid_token` | 401 | Access token is expired, revoked, or malformed |
+| `unsupported_grant_type` | 400 | Use authorization_code, refresh_token, or client_credentials |
+
+---
+
+## Discovery Endpoint
+
+NS Auth publishes a discovery document at `https://api.nsauth.org/.well-known/openid-configuration`. Auth libraries like NextAuth, Passport.js, and Spring Security can auto-configure themselves from this URL.
+
+```json
+{
+  "issuer": "https://api.nsauth.org",
+  "authorization_endpoint": "https://api.nsauth.org/oauth/authorize",
+  "token_endpoint": "https://api.nsauth.org/oauth/token",
+  "userinfo_endpoint": "https://api.nsauth.org/oauth/userinfo",
+  "jwks_uri": "https://api.nsauth.org/.well-known/jwks.json",
+  "introspection_endpoint": "https://api.nsauth.org/oauth/token/introspect",
+  "revocation_endpoint": "https://api.nsauth.org/oauth/token/revoke",
+  "response_types_supported": ["code"],
+  "grant_types_supported": [
+    "client_credentials",
+    "authorization_code",
+    "refresh_token"
+  ],
+  "id_token_signing_alg_values_supported": ["RS256"],
+  "scopes_supported": [
+    "openid", "profile", "email",
+    "roles", "date_joined", "offline_access"
+  ],
+  "code_challenge_methods_supported": ["S256", "plain"]
+}
+```
+
+Access tokens and ID tokens are signed with **RS256**. Verify them using the public keys from `/.well-known/jwks.json`. The JWKS endpoint rotates keys automatically — always fetch it dynamically rather than hardcoding keys.

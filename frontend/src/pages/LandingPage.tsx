@@ -42,8 +42,8 @@ const STEPS = [
 
 const FEATURES = [
   {
-    title: "OAuth 2.0 + OIDC",
-    description: "Standards-compliant. PKCE, RS256 signed tokens, JWKS discovery. Works with any auth library out of the box.",
+    title: "OAuth 2.0 + PKCE",
+    description: "Standards-compliant. PKCE, RS256 signed tokens, and a discovery endpoint. Works with any auth library out of the box.",
     icon: Shield,
   },
   {
@@ -58,7 +58,7 @@ const FEATURES = [
   },
   {
     title: "Drop-in SDKs",
-    description: "Copy-paste React and Next.js examples. Or use NextAuth with a single issuer URL. Full docs and a working demo app.",
+    description: "Copy-paste React and Next.js examples. Works with NextAuth via a single discovery URL. Full docs and a working demo app.",
     icon: Layers,
   },
 ]
@@ -219,7 +219,7 @@ export function LandingPage() {
                 transition={{ duration: 0.5, delay: 0.9 }}
                 className="absolute bottom-6 -right-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-[#0a0a0a] shadow-sm"
               >
-                OIDC Discovery
+                Auto-Discovery
               </motion.div>
             </div>
           </motion.div>
