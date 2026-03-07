@@ -560,3 +560,4 @@ ns-auth/
 │   └── railway.toml
 └── CLAUDE.md                # Detailed technical reference
 ```
+.
