@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NS Auth — Engineering Deep Dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--surface:#111114;--surface2:#18181d;--border:#1e1e25;--border2:#2a2a33;
+  --text:#ffffff;--text2:#9d9daa;--text3:#5c5c6a;
+  --amber:#e8a020;--amber-dim:rgba(232,160,32,0.15);--amber-glow:rgba(232,160,32,0.06);
+  --blue:#5b9cf5;--blue-dim:rgba(91,156,245,0.15);
+  --purple:#5865F2;--purple-dim:rgba(88,101,242,0.15);
+  --green:#34d399;--green-dim:rgba(52,211,153,0.15);
+  --red:#f57580;--red-dim:rgba(245,117,128,0.15);
+  --font-sans:'Inter',system-ui,-apple-system,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,monospace;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font-sans);line-height:1.7;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+.wrap{max-width:900px;margin:0 auto;padding:0 28px}
+
+/* ---- HERO ---- */
+.hero{padding:120px 0 80px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:600px;height:600px;background:radial-gradient(circle,var(--amber-glow),transparent 70%);pointer-events:none}
+.hero::after{content:'';position:absolute;bottom:-100px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(88,101,242,0.04),transparent 70%);pointer-events:none}
+.tag{display:inline-flex;align-items:center;gap:8px;padding:5px 14px;border:1px solid var(--border2);border-radius:100px;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);font-family:var(--font-mono);margin-bottom:28px}
+.tag .dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{font-family:var(--font-sans);font-size:clamp(36px,5vw,48px);font-weight:700;line-height:1.15;margin-bottom:20px;letter-spacing:-0.02em}
+.hero h1 em{color:var(--amber);font-style:normal}
+.hero .sub{font-size:16px;color:var(--text2);font-weight:400;max-width:520px;margin:0 auto}
+
+/* ---- TOC ---- */
+.toc{position:sticky;top:0;z-index:100;background:rgba(10,10,10,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:10px 0}
+.toc-row{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;max-width:900px;margin:0 auto;padding:0 28px}
+.toc-row::-webkit-scrollbar{display:none}
+.toc-row a{padding:5px 12px;border-radius:6px;font-size:12px;color:var(--text3);text-decoration:none;white-space:nowrap;font-family:var(--font-mono);font-weight:500;transition:.2s}
+.toc-row a:hover{color:var(--text);background:var(--surface2)}
+.toc-row a.active{color:var(--amber);background:var(--amber-dim)}
+
+/* ---- SECTIONS ---- */
+.sec{margin-bottom:100px;opacity:0;transform:translateY(24px);transition:opacity .7s,transform .7s}
+.sec.vis{opacity:1;transform:none}
+.sec-label{font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px}
+.sec h2{font-family:var(--font-sans);font-size:clamp(24px,3.5vw,36px);font-weight:700;line-height:1.2;margin-bottom:8px;letter-spacing:-0.02em}
+.sec .intro{color:var(--text2);font-size:15px;margin-bottom:32px;max-width:680px}
+
+/* ---- DIAGRAM ---- */
+.diagram{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;margin:24px 0;overflow-x:auto}
+.diagram svg{display:block;margin:0 auto}
+
+/* ---- FLOW STEP (vertical narrative) ---- */
+.flow{position:relative;padding-left:48px;margin:32px 0}
+.flow::before{content:'';position:absolute;left:15px;top:0;bottom:0;width:1px;background:linear-gradient(to bottom,var(--border2),var(--amber-dim),var(--border2))}
+.step{position:relative;margin-bottom:32px}
+.step:last-child{margin-bottom:0}
+.step .num{position:absolute;left:-48px;top:0;width:31px;height:31px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--text3);z-index:1}
+.step.active .num{background:var(--amber-dim);border-color:var(--amber);color:var(--amber)}
+.step h4{font-size:15px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.step p{color:var(--text2);font-size:14px;line-height:1.7}
+.step pre{margin-top:8px}
+
+/* ---- CARDS ---- */
+.cards{display:grid;gap:14px;margin:20px 0}
+.cards-2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.cards-3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.cards-4{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;transition:all .3s}
+.card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 12px 40px rgba(0,0,0,0.4)}
+.card h5{font-family:var(--font-mono);font-size:13px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.card p{font-size:13px;color:var(--text2);line-height:1.6}
+
+/* ---- BADGES ---- */
+.b{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-size:10px;font-family:var(--font-mono);font-weight:600;letter-spacing:.3px;vertical-align:middle}
+.b-a{background:var(--amber-dim);color:var(--amber)}
+.b-b{background:var(--blue-dim);color:var(--blue)}
+.b-p{background:var(--purple-dim);color:var(--purple)}
+.b-g{background:var(--green-dim);color:var(--green)}
+.b-r{background:var(--red-dim);color:var(--red)}
+
+/* ---- CODE ---- */
+pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 18px;font-family:var(--font-mono);font-size:12px;line-height:1.8;overflow-x:auto;color:var(--text2);margin:10px 0}
+code{font-family:var(--font-mono);font-size:12px;background:var(--surface2);padding:1px 5px;border-radius:3px;color:var(--amber)}
+pre code{background:none;padding:0;color:inherit}
+
+/* ---- TABLE ---- */
+.tbl{overflow-x:auto;border:1px solid var(--border);border-radius:16px;margin:16px 0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead{background:var(--surface2)}
+th{padding:10px 14px;text-align:left;font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border)}
+td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text2)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface)}
+
+/* ---- DETAILS ---- */
+details{background:var(--surface);border:1px solid var(--border);border-radius:16px;margin-bottom:10px;overflow:hidden;transition:all .3s}
+details:hover{border-color:var(--border2);box-shadow:0 12px 40px rgba(0,0,0,0.4)}
+details[open]{border-color:rgba(232,160,32,.25)}
+summary{padding:14px 20px;cursor:pointer;font-size:14px;color:var(--text);list-style:none;display:flex;align-items:center;gap:10px;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:'›';font-size:16px;color:var(--text3);transition:transform .2s;font-weight:600;width:12px}
+details[open] summary::before{transform:rotate(90deg)}
+.det{padding:0 20px 18px;font-size:13px;color:var(--text2);line-height:1.7}
+
+/* ---- PHASE HEADER ---- */
+.phase{display:flex;align-items:center;gap:14px;margin:48px 0 24px}
+.phase-dot{width:8px;height:8px;border-radius:50%}
+.phase h3{font-family:var(--font-sans);font-size:16px;font-weight:600;letter-spacing:-0.01em}
+.phase-line{flex:1;height:1px;background:var(--border2)}
+
+/* ---- SCHEMA ---- */
+.schema{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:14px}
+.schema-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.schema-name{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--amber)}
+.schema-row{display:grid;grid-template-columns:130px 100px 1fr;padding:6px 18px;font-size:12px;font-family:var(--font-mono);border-bottom:1px solid var(--border)}
+.schema-row:last-child{border-bottom:none}
+.schema-row:hover{background:var(--surface2)}
+.schema-row .n{color:var(--text);font-weight:500}
+.schema-row .t{color:var(--purple)}
+.schema-row .d{color:var(--text3);font-family:var(--font-sans);font-size:12px}
+
+/* ---- RESPONSIVE ---- */
+@media(max-width:640px){
+  .cards-2,.cards-3,.cards-4{grid-template-columns:1fr}
+  .schema-row{grid-template-columns:1fr;gap:2px}
+  .hero{padding:80px 0 50px}
+  .diagram{padding:16px}
+}
+
+footer{border-top:1px solid var(--border);padding:40px 0;text-align:center;color:var(--text3);font-size:12px;margin-top:80px}
+</style>
+</head>
+<body>
+
+<!-- ============ HERO ============ -->
+<div class="hero">
+  <div class="wrap">
+    <div class="tag"><span class="dot"></span> Engineering Reference</div>
+    <h1>How <em>NS Auth</em> works</h1>
+    <p class="sub">A step-by-step walkthrough of every request, redirect, and database operation in the NS OAuth system.</p>
+  </div>
+</div>
+
+<nav class="toc"><div class="toc-row">
+  <a href="#overview">Overview</a>
+  <a href="#the-flow">The Flow</a>
+  <a href="#security">Security</a>
+  <a href="#tokens">Tokens</a>
+  <a href="#data">Scopes & Data</a>
+  <a href="#db">Database</a>
+  <a href="#errors">Errors</a>
+  <a href="#api">API</a>
+</div></nav>
+
+<div class="wrap">
+
+<!-- ============================================================ -->
+<!-- 1. THE BIG PICTURE                                           -->
+<!-- ============================================================ -->
+<section id="overview" class="sec">
+  <div class="sec-label">01</div>
+  <h2>The big picture</h2>
+  <p class="intro">Four systems talk to each other. The user never leaves their browser.</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 820 200" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:820px">
+      <!-- Boxes -->
+      <rect x="0" y="60" width="160" height="80" rx="12" fill="rgba(91,156,245,0.06)" stroke="#5b9cf5" stroke-width="1.5"/>
+      <text x="80" y="95" text-anchor="middle" fill="#5b9cf5" font-family="ui-monospace,SFMono-Regular,monospace" font-size="13" font-weight="600">Client App</text>
+      <text x="80" y="118" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="11">Third-party app</text>
+
+      <rect x="220" y="60" width="160" height="80" rx="12" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="300" y="95" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="13" font-weight="600">NS Frontend</text>
+      <text x="300" y="118" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="11">Login + Consent UI</text>
+
+      <rect x="440" y="60" width="160" height="80" rx="12" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="520" y="95" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="13" font-weight="600">NS Backend</text>
+      <text x="520" y="118" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="11">FastAPI + PostgreSQL</text>
+
+      <rect x="660" y="60" width="160" height="80" rx="12" fill="rgba(88,101,242,0.06)" stroke="#5865F2" stroke-width="1.5"/>
+      <text x="740" y="95" text-anchor="middle" fill="#5865F2" font-family="ui-monospace,SFMono-Regular,monospace" font-size="13" font-weight="600">Discord</text>
+      <text x="740" y="118" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="11">Identity + Roles</text>
+
+      <!-- Arrows -->
+      <path d="M160 90 L220 90" stroke="rgba(91,156,245,0.25)" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+      <path d="M380 90 L440 90" stroke="rgba(232,160,32,0.25)" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+      <path d="M600 90 L660 90" stroke="rgba(88,101,242,0.25)" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+      <path d="M660 110 L600 110" stroke="rgba(88,101,242,0.25)" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+      <path d="M440 110 L380 110" stroke="rgba(232,160,32,0.25)" stroke-width="1.5" marker-end="url(#arr-blue2)"/>
+
+      <!-- Arrow labels -->
+      <text x="190" y="82" text-anchor="middle" fill="#5c5c6a" font-family="Inter,system-ui,sans-serif" font-size="9">redirect</text>
+      <text x="410" y="82" text-anchor="middle" fill="#5c5c6a" font-family="Inter,system-ui,sans-serif" font-size="9">API calls</text>
+      <text x="630" y="82" text-anchor="middle" fill="#5c5c6a" font-family="Inter,system-ui,sans-serif" font-size="9">OAuth + Bot</text>
+      <text x="630" y="122" text-anchor="middle" fill="#5c5c6a" font-family="Inter,system-ui,sans-serif" font-size="9">user data</text>
+      <text x="410" y="122" text-anchor="middle" fill="#5c5c6a" font-family="Inter,system-ui,sans-serif" font-size="9">tokens</text>
+
+      <!-- DB -->
+      <ellipse cx="520" cy="180" rx="40" ry="16" fill="rgba(52,211,153,0.06)" stroke="#34d399" stroke-width="1"/>
+      <text x="520" y="184" text-anchor="middle" fill="#34d399" font-family="ui-monospace,SFMono-Regular,monospace" font-size="10">PostgreSQL</text>
+      <path d="M520 140 L520 164" stroke="rgba(52,211,153,0.25)" stroke-width="1" marker-end="url(#arr-green)"/>
+
+      <!-- Arrowheads -->
+      <defs>
+        <marker id="arr-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5b9cf5"/></marker>
+        <marker id="arr-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#e8a020"/></marker>
+        <marker id="arr-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5865F2"/></marker>
+        <marker id="arr-blue2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5b9cf5"/></marker>
+        <marker id="arr-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/></marker>
+      </defs>
+    </svg>
+  </div>
+
+  <p style="color:var(--text2);font-size:14px;text-align:center;margin-top:8px">The user clicks "Sign in with Network School" → authenticates via Discord → approves scopes → gets tokens back. That's it.</p>
+</section>
+
+<!-- ============================================================ -->
+<!-- 2. THE FLOW — STEP BY STEP                                   -->
+<!-- ============================================================ -->
+<section id="the-flow" class="sec">
+  <div class="sec-label">02</div>
+  <h2>The flow, step by step</h2>
+  <p class="intro">We'll walk through the entire authorization code + PKCE flow in 6 phases. Each phase has a diagram showing exactly what happens.</p>
+
+  <!-- ======== PHASE A ======== -->
+  <div class="phase">
+    <div class="phase-dot" style="background:var(--blue)"></div>
+    <h3>Phase A — User clicks "Sign In"</h3>
+    <div class="phase-line"></div>
+  </div>
+
+  <div class="diagram">
+    <svg viewBox="0 0 780 140" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:780px">
+      <rect x="0" y="30" width="180" height="60" rx="10" fill="rgba(91,156,245,0.06)" stroke="#5b9cf5" stroke-width="1.5"/>
+      <text x="90" y="55" text-anchor="middle" fill="#5b9cf5" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Client App</text>
+      <text x="90" y="72" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Generate PKCE + state</text>
+
+      <path d="M180 60 L280 60" stroke="rgba(91,156,245,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-amber)"/>
+      <text x="230" y="50" text-anchor="middle" fill="#5c5c6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="9">GET /oauth/authorize</text>
+
+      <rect x="280" y="30" width="180" height="60" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="370" y="55" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">NS Backend</text>
+      <text x="370" y="72" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Validate params, check session</text>
+
+      <path d="M460 60 L560 60" stroke="rgba(232,160,32,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-amber2)"/>
+      <text x="510" y="50" text-anchor="middle" fill="#5c5c6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="9">302 redirect</text>
+
+      <rect x="560" y="30" width="210" height="60" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="665" y="55" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">NS Frontend /login</text>
+      <text x="665" y="72" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">"Sign in with Discord" button</text>
+
+      <text x="370" y="120" text-anchor="middle" fill="#5c5c6a" font-family="Inter,system-ui,sans-serif" font-size="11" font-style="italic">No session cookie → redirect to login</text>
+
+      <defs>
+        <marker id="arr-amber2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#e8a020"/></marker>
+      </defs>
+    </svg>
+  </div>
+
+  <div class="flow">
+    <div class="step">
+      <div class="num">1</div>
+      <h4><span class="b b-b">CLIENT</span> Generate PKCE pair</h4>
+      <p>Create a random <code>code_verifier</code> (43-128 chars). Hash it: <code>code_challenge = base64url(SHA256(verifier))</code>. Also generate a random <code>state</code> for CSRF.</p>
+    </div>
+    <div class="step">
+      <div class="num">2</div>
+      <h4><span class="b b-b">CLIENT</span> Redirect to NS Auth</h4>
+      <p>Browser navigates to <code>/oauth/authorize</code> with query params: <code>response_type=code</code>, <code>client_id</code>, <code>redirect_uri</code>, <code>scope</code>, <code>state</code>, <code>code_challenge</code>, <code>code_challenge_method=S256</code>.</p>
+    </div>
+    <div class="step">
+      <div class="num">3</div>
+      <h4><span class="b b-a">BACKEND</span> Validate everything</h4>
+      <p>Check: client_id exists? redirect_uri matches registered? scopes are valid? code_challenge_method is S256? All good → check for <code>ns_session</code> cookie.</p>
+    </div>
+    <div class="step">
+      <div class="num">4</div>
+      <h4><span class="b b-a">BACKEND</span> No session → redirect to login</h4>
+      <p>No cookie found. 302 redirect to the frontend's <code>/login</code> page, forwarding all OAuth params so they survive the login round-trip.</p>
+    </div>
+  </div>
+
+  <!-- ======== PHASE B ======== -->
+  <div class="phase">
+    <div class="phase-dot" style="background:var(--purple)"></div>
+    <h3>Phase B — Discord login</h3>
+    <div class="phase-line"></div>
+  </div>
+
+  <div class="diagram">
+    <svg viewBox="0 0 780 200" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:780px">
+      <!-- Row 1: Frontend → Backend → Discord -->
+      <rect x="0" y="20" width="170" height="55" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="85" y="43" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Frontend</text>
+      <text x="85" y="59" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">→ /auth/discord</text>
+
+      <path d="M170 47 L250 47" stroke="rgba(232,160,32,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-amber)"/>
+
+      <rect x="250" y="20" width="200" height="55" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="350" y="43" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Backend</text>
+      <text x="350" y="59" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Generate CSRF state → DB</text>
+
+      <path d="M450 47 L540 47" stroke="rgba(88,101,242,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-purple)"/>
+      <text x="495" y="38" text-anchor="middle" fill="#5c5c6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="9">302</text>
+
+      <rect x="540" y="20" width="230" height="55" rx="10" fill="rgba(88,101,242,0.06)" stroke="#5865F2" stroke-width="1.5"/>
+      <text x="655" y="43" text-anchor="middle" fill="#5865F2" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Discord Login Page</text>
+      <text x="655" y="59" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">User authenticates</text>
+
+      <!-- Row 2: Discord → Backend (callback) -->
+      <path d="M655 75 L655 110" stroke="rgba(88,101,242,0.19)" stroke-width="1" stroke-dasharray="4 4"/>
+
+      <rect x="250" y="105" width="200" height="55" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="350" y="128" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Backend /callback</text>
+      <text x="350" y="144" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Validate state, exchange code</text>
+
+      <path d="M540 130 L450 130" stroke="rgba(88,101,242,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-amber)"/>
+      <text x="495" y="120" text-anchor="middle" fill="#5c5c6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="9">code + state</text>
+
+      <rect x="540" y="105" width="230" height="55" rx="10" fill="rgba(88,101,242,0.06)" stroke="#5865F2" stroke-width="1.5"/>
+      <text x="655" y="128" text-anchor="middle" fill="#5865F2" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Discord API</text>
+      <text x="655" y="144" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Token + User Profile</text>
+
+      <path d="M450 140 L540 140" stroke="rgba(232,160,32,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-purple)"/>
+      <text x="495" y="168" text-anchor="middle" fill="#5c5c6a" font-family="Inter,system-ui,sans-serif" font-size="10" font-style="italic">Backend exchanges code for Discord token, fetches /users/@me</text>
+    </svg>
+  </div>
+
+  <div class="flow">
+    <div class="step">
+      <div class="num">5</div>
+      <h4><span class="b b-a">BACKEND</span> Create CSRF state</h4>
+      <p>Generate a random 43-char state token. Store it in <code>oauth_states</code> table with a <strong>10-minute TTL</strong> and the <code>next</code> URL (where to go after login). This prevents CSRF attacks on the callback.</p>
+    </div>
+    <div class="step">
+      <div class="num">6</div>
+      <h4><span class="b b-a">BACKEND</span> Redirect to Discord</h4>
+      <p>302 to <code>discord.com/oauth2/authorize</code> requesting scopes: <code>identify email guilds.members.read</code>. The state token goes along for the ride.</p>
+    </div>
+    <div class="step">
+      <div class="num">7</div>
+      <h4><span class="b b-p">DISCORD</span> User logs in</h4>
+      <p>User authenticates with Discord (username + password, or if already logged in, just click "Authorize"). Discord redirects back to our <code>/auth/discord/callback</code> with a <code>code</code> and the <code>state</code>.</p>
+    </div>
+    <div class="step">
+      <div class="num">8</div>
+      <h4><span class="b b-a">BACKEND</span> Validate callback</h4>
+      <p>Check the <code>state</code> matches what's in our DB (one-time use — delete it). Then exchange the Discord code for a Discord access token by calling <code>POST discord.com/api/v10/oauth2/token</code>.</p>
+    </div>
+    <div class="step">
+      <div class="num">9</div>
+      <h4><span class="b b-a">BACKEND</span> Fetch Discord profile</h4>
+      <p>Use the Discord token to call <code>GET /users/@me</code> → get the user's Discord ID, username, email, avatar, and public flags.</p>
+    </div>
+  </div>
+
+  <!-- ======== PHASE C ======== -->
+  <div class="phase">
+    <div class="phase-dot" style="background:var(--red)"></div>
+    <h3>Phase C — Membership gate</h3>
+    <div class="phase-line"></div>
+  </div>
+
+  <div class="diagram">
+    <svg viewBox="0 0 780 150" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:780px">
+      <rect x="0" y="40" width="200" height="55" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="100" y="63" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Backend</text>
+      <text x="100" y="79" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">GET /guilds/{id}/members/{user}</text>
+
+      <path d="M200 67 L290 67" stroke="rgba(88,101,242,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-purple)"/>
+      <text x="245" y="57" text-anchor="middle" fill="#5c5c6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="9">Bot token</text>
+
+      <rect x="290" y="40" width="160" height="55" rx="10" fill="rgba(88,101,242,0.06)" stroke="#5865F2" stroke-width="1.5"/>
+      <text x="370" y="63" text-anchor="middle" fill="#5865F2" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Discord API</text>
+      <text x="370" y="79" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Is user in NS guild?</text>
+
+      <!-- Two paths — spaced apart vertically -->
+      <path d="M450 52 L540 30" stroke="rgba(52,211,153,0.25)" stroke-width="1.5" marker-end="url(#arr-green)"/>
+      <rect x="540" y="8" width="120" height="42" rx="8" fill="rgba(52,211,153,0.06)" stroke="#34d399" stroke-width="1"/>
+      <text x="600" y="26" text-anchor="middle" fill="#34d399" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">200 OK</text>
+      <text x="600" y="41" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="9">→ continue</text>
+
+      <path d="M450 82 L540 105" stroke="rgba(245,117,128,0.25)" stroke-width="1.5" marker-end="url(#arr-red)"/>
+      <rect x="540" y="86" width="120" height="42" rx="8" fill="rgba(245,117,128,0.06)" stroke="#f57580" stroke-width="1"/>
+      <text x="600" y="104" text-anchor="middle" fill="#f57580" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">404</text>
+      <text x="600" y="119" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="9">→ 403 rejected</text>
+
+      <defs>
+        <marker id="arr-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f57580"/></marker>
+      </defs>
+    </svg>
+  </div>
+
+  <div class="flow">
+    <div class="step">
+      <div class="num">10</div>
+      <h4><span class="b b-a">BACKEND</span> Verify NS membership</h4>
+      <p>Using the <strong>bot token</strong> (not the user's token), call <code>GET /guilds/{guild_id}/members/{discord_id}</code>. If Discord returns 404 → the user is <strong>not</strong> in the NS server → <code>403 not_ns_member</code>. No exceptions.</p>
+    </div>
+    <div class="step">
+      <div class="num">11</div>
+      <h4><span class="b b-a">BACKEND</span> Create or update user</h4>
+      <p>Look up <code>users</code> by <code>discord_id</code>. First time? Insert a new row. Returning user? Update their email if it changed. This is <strong>JIT (just-in-time) provisioning</strong> — no user registration flow needed.</p>
+    </div>
+  </div>
+
+  <!-- ======== PHASE D ======== -->
+  <div class="phase">
+    <div class="phase-dot" style="background:var(--green)"></div>
+    <h3>Phase D — Session handoff</h3>
+    <div class="phase-line"></div>
+  </div>
+
+  <p style="color:var(--text2);font-size:14px;margin-bottom:16px">We need to get a session JWT to the frontend. But we <strong>can't put the JWT in the URL</strong> — it would leak in browser history, server logs, and Referer headers. So we use a <strong>session code relay</strong>:</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 780 110" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:780px">
+      <rect x="0" y="25" width="180" height="55" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="90" y="48" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Backend</text>
+      <text x="90" y="64" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Generate session code (60s)</text>
+
+      <path d="M180 52 L265 52" stroke="rgba(232,160,32,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-amber)"/>
+      <text x="222" y="42" text-anchor="middle" fill="#5c5c6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="9">302</text>
+      <text x="222" y="72" text-anchor="middle" fill="#5c5c6a" font-family="Inter,system-ui,sans-serif" font-size="9">?code=abc123</text>
+
+      <rect x="265" y="25" width="210" height="55" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="370" y="48" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Frontend /auth/session</text>
+      <text x="370" y="64" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">POST /auth/session/exchange</text>
+
+      <path d="M475 52 L560 52" stroke="rgba(52,211,153,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-green2)"/>
+      <text x="517" y="42" text-anchor="middle" fill="#5c5c6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="9">exchange</text>
+
+      <rect x="560" y="25" width="200" height="55" rx="10" fill="rgba(52,211,153,0.06)" stroke="#34d399" stroke-width="1.5"/>
+      <text x="660" y="48" text-anchor="middle" fill="#34d399" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Session established</text>
+      <text x="660" y="64" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">HS256 JWT → cookie + localStorage</text>
+
+      <defs>
+        <marker id="arr-green2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/></marker>
+      </defs>
+    </svg>
+  </div>
+
+  <div class="flow">
+    <div class="step">
+      <div class="num">12</div>
+      <h4><span class="b b-a">BACKEND</span> Generate session code</h4>
+      <p>Create a 43-char random code, store it in <code>session_codes</code> table with the user_id and a <strong>60-second TTL</strong>. This code is single-use.</p>
+    </div>
+    <div class="step">
+      <div class="num">13</div>
+      <h4><span class="b b-a">BACKEND</span> Redirect to frontend</h4>
+      <p>302 to <code>{frontend}/auth/session?code={session_code}&next=/consent?...</code>. The short-lived code is safe to put in the URL — even if leaked, it expires in 60 seconds and can only be used once.</p>
+    </div>
+    <div class="step">
+      <div class="num">14</div>
+      <h4><span class="b b-a">FRONTEND</span> Exchange code for JWT</h4>
+      <p><code>POST /auth/session/exchange</code> with <code>{"code": "..."}</code>. Backend validates: exists? not expired? not already used? → marks it used → returns an <strong>HS256 session JWT</strong> (24h TTL). Set as <code>ns_session</code> httponly cookie + localStorage.</p>
+    </div>
+  </div>
+
+  <!-- ======== PHASE E ======== -->
+  <div class="phase">
+    <div class="phase-dot" style="background:var(--amber)"></div>
+    <h3>Phase E — User consent</h3>
+    <div class="phase-line"></div>
+  </div>
+
+  <div class="diagram">
+    <svg viewBox="0 0 780 110" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:780px">
+      <rect x="0" y="25" width="190" height="55" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="95" y="48" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Frontend /consent</text>
+      <text x="95" y="64" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Show app name + scopes</text>
+
+      <path d="M190 52 L280 52" stroke="rgba(232,160,32,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-amber)"/>
+      <text x="235" y="42" text-anchor="middle" fill="#5c5c6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="9">Allow</text>
+
+      <rect x="280" y="25" width="220" height="55" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="390" y="48" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Backend /consent</text>
+      <text x="390" y="64" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Generate auth code (128 chars, 10 min)</text>
+
+      <path d="M500 52 L590 52" stroke="rgba(52,211,153,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-green2)"/>
+      <text x="545" y="42" text-anchor="middle" fill="#5c5c6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="9">JSON</text>
+
+      <rect x="590" y="25" width="180" height="55" rx="10" fill="rgba(91,156,245,0.06)" stroke="#5b9cf5" stroke-width="1.5"/>
+      <text x="680" y="48" text-anchor="middle" fill="#5b9cf5" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Client /callback</text>
+      <text x="680" y="64" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Receives code + state</text>
+
+      <text x="390" y="105" text-anchor="middle" fill="#5c5c6a" font-family="Inter,system-ui,sans-serif" font-size="10" font-style="italic">Returns {"redirect_to": "callback?code=...&state=..."} as JSON, not 302</text>
+    </svg>
+  </div>
+
+  <div class="flow">
+    <div class="step">
+      <div class="num">15</div>
+      <h4><span class="b b-a">FRONTEND</span> Show consent screen</h4>
+      <p>Fetch app info from <code>GET /oauth/authorize/info</code> and user from <code>GET /auth/me</code>. Display the app name, its icon, and which scopes it's requesting. User clicks "Allow" or "Deny".</p>
+    </div>
+    <div class="step">
+      <div class="num">16</div>
+      <h4><span class="b b-a">BACKEND</span> Generate authorization code</h4>
+      <p>On "Allow": generate a <strong>128-char auth code</strong> (<code>secrets.token_urlsafe(64)</code>). Store in <code>authorization_codes</code> with: user_id, app_id, scope, code_challenge, redirect_uri. Expires in <strong>10 minutes</strong>.</p>
+    </div>
+    <div class="step">
+      <div class="num">17</div>
+      <h4><span class="b b-a">BACKEND</span> Return redirect URL as JSON</h4>
+      <p>Return <code>{"redirect_to": "client_callback?code=...&state=..."}</code>. <strong>Why JSON and not 302?</strong> Because the frontend made a <code>fetch()</code> with cookies. A cross-origin 302 creates an opaque redirect — JavaScript can't read the Location header. So we return it in the body.</p>
+    </div>
+  </div>
+
+  <!-- ======== PHASE F ======== -->
+  <div class="phase">
+    <div class="phase-dot" style="background:var(--green)"></div>
+    <h3>Phase F — Token exchange</h3>
+    <div class="phase-line"></div>
+  </div>
+
+  <div class="diagram">
+    <svg viewBox="0 0 780 210" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:780px">
+      <!-- Row 1: Client → Backend (token) -->
+      <rect x="0" y="15" width="210" height="55" rx="10" fill="rgba(91,156,245,0.06)" stroke="#5b9cf5" stroke-width="1.5"/>
+      <text x="105" y="38" text-anchor="middle" fill="#5b9cf5" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Client App</text>
+      <text x="105" y="54" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">POST /oauth/token + code_verifier</text>
+
+      <path d="M210 42 L310 42" stroke="rgba(91,156,245,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-amber)"/>
+
+      <rect x="310" y="15" width="240" height="55" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="430" y="38" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Backend</text>
+      <text x="430" y="54" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Verify PKCE + issue RS256 tokens</text>
+
+      <path d="M310 55 L210 55" stroke="rgba(52,211,153,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-blue)"/>
+
+      <!-- Tokens issued -->
+      <rect x="600" y="0" width="170" height="32" rx="6" fill="rgba(52,211,153,0.06)" stroke="#34d399" stroke-width="1"/>
+      <text x="685" y="20" text-anchor="middle" fill="#34d399" font-family="ui-monospace,SFMono-Regular,monospace" font-size="10" font-weight="600">Access Token (RS256)</text>
+
+      <rect x="600" y="40" width="170" height="32" rx="6" fill="rgba(91,156,245,0.06)" stroke="#5b9cf5" stroke-width="1"/>
+      <text x="685" y="60" text-anchor="middle" fill="#5b9cf5" font-family="ui-monospace,SFMono-Regular,monospace" font-size="10" font-weight="600">Refresh Token</text>
+
+      <rect x="600" y="80" width="170" height="32" rx="6" fill="rgba(88,101,242,0.06)" stroke="#5865F2" stroke-width="1"/>
+      <text x="685" y="100" text-anchor="middle" fill="#5865F2" font-family="ui-monospace,SFMono-Regular,monospace" font-size="10" font-weight="600">ID Token (RS256)</text>
+
+      <path d="M550 42 L600 16" stroke="rgba(52,211,153,0.19)" stroke-width="1"/>
+      <path d="M550 42 L600 56" stroke="rgba(91,156,245,0.19)" stroke-width="1"/>
+      <path d="M550 42 L600 96" stroke="rgba(88,101,242,0.19)" stroke-width="1"/>
+
+      <!-- Row 2: Client → Backend (userinfo) -->
+      <rect x="0" y="140" width="210" height="55" rx="10" fill="rgba(91,156,245,0.06)" stroke="#5b9cf5" stroke-width="1.5"/>
+      <text x="105" y="163" text-anchor="middle" fill="#5b9cf5" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Client App</text>
+      <text x="105" y="179" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">GET /oauth/userinfo + Bearer token</text>
+
+      <path d="M210 167 L310 167" stroke="rgba(91,156,245,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-amber)"/>
+
+      <rect x="310" y="140" width="240" height="55" rx="10" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1.5"/>
+      <text x="430" y="163" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="11" font-weight="600">Backend</text>
+      <text x="430" y="179" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="10">Introspect token → fetch Discord data</text>
+
+      <path d="M310 180 L210 180" stroke="rgba(52,211,153,0.25)" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr-blue)"/>
+      <text x="260" y="200" text-anchor="middle" fill="#5c5c6a" font-family="Inter,system-ui,sans-serif" font-size="9">user profile JSON</text>
+    </svg>
+  </div>
+
+  <div class="flow">
+    <div class="step active">
+      <div class="num">18</div>
+      <h4><span class="b b-b">CLIENT</span> Exchange code for tokens</h4>
+      <p><code>POST /oauth/token</code> with <code>grant_type=authorization_code</code>, the auth code, the original <code>code_verifier</code>, client_id, and client_secret.</p>
+    </div>
+    <div class="step active">
+      <div class="num">19</div>
+      <h4><span class="b b-a">BACKEND</span> Verify everything and issue tokens</h4>
+      <p>Five checks: (1) client_id + secret match (bcrypt), (2) auth code exists and not expired, (3) code not already used, (4) redirect_uri matches, (5) <strong>PKCE: SHA256(code_verifier) == stored code_challenge</strong>. Then mark code used and issue:</p>
+      <div class="cards cards-3" style="margin-top:8px">
+        <div class="card" style="border-color:var(--green)">
+          <h5 style="color:var(--green)">Access Token</h5>
+          <p>RS256 JWT, 1h TTL. Contains sub, iss, aud, scope, jti. SHA256 hash stored in DB.</p>
+        </div>
+        <div class="card" style="border-color:var(--blue)">
+          <h5 style="color:var(--blue)">Refresh Token</h5>
+          <p>Opaque 64-char string, 30-day TTL. SHA256 hash stored with family_id for rotation.</p>
+        </div>
+        <div class="card" style="border-color:var(--purple)">
+          <h5 style="color:var(--purple)">ID Token</h5>
+          <p>RS256 JWT (only if <code>openid</code> scope). Contains sub, iss, aud, nonce.</p>
+        </div>
+      </div>
+    </div>
+    <div class="step active">
+      <div class="num">20</div>
+      <h4><span class="b b-b">CLIENT</span> Fetch user data</h4>
+      <p><code>GET /oauth/userinfo</code> with <code>Authorization: Bearer {access_token}</code>. Backend introspects the token, fetches <strong>live data from Discord API</strong> (cached 5 min), and returns claims based on granted scopes.</p>
+    </div>
+  </div>
+
+  <div style="background:var(--green-dim);border:1px solid rgba(52,211,153,.15);border-radius:12px;padding:20px 24px;margin-top:32px">
+    <p style="color:var(--green);font-weight:600;font-size:14px;margin-bottom:4px">Flow complete.</p>
+    <p style="color:var(--text2);font-size:14px">The client app now has tokens and user data. The user is signed in with Network School.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 3. SECURITY                                                  -->
+<!-- ============================================================ -->
+<section id="security" class="sec">
+  <div class="sec-label">03</div>
+  <h2>Security mechanisms</h2>
+  <p class="intro">Eight layers of protection. Click any to see how it works.</p>
+
+  <details>
+    <summary><span class="b b-b">PKCE S256</span> Prevents authorization code interception</summary>
+    <div class="det">
+      <div class="diagram" style="padding:20px">
+        <svg viewBox="0 0 700 80" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px">
+          <rect x="0" y="15" width="150" height="45" rx="8" fill="rgba(91,156,245,0.06)" stroke="#5b9cf5" stroke-width="1"/>
+          <text x="75" y="35" text-anchor="middle" fill="#5b9cf5" font-family="ui-monospace,SFMono-Regular,monospace" font-size="10" font-weight="600">code_verifier</text>
+          <text x="75" y="50" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="9">random 43-128 chars</text>
+
+          <path d="M150 37 L230 37" stroke="rgba(91,156,245,0.19)" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+          <text x="190" y="28" text-anchor="middle" fill="#5c5c6a" font-family="ui-monospace,SFMono-Regular,monospace" font-size="9">SHA256</text>
+
+          <rect x="230" y="15" width="155" height="45" rx="8" fill="rgba(232,160,32,0.06)" stroke="#e8a020" stroke-width="1"/>
+          <text x="307" y="35" text-anchor="middle" fill="#e8a020" font-family="ui-monospace,SFMono-Regular,monospace" font-size="10" font-weight="600">code_challenge</text>
+          <text x="307" y="50" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="9">sent in /authorize</text>
+
+          <path d="M385 37 L440 37" stroke="rgba(232,160,32,0.19)" stroke-width="1.5"/>
+          <text x="413" y="28" text-anchor="middle" fill="#5c5c6a" font-family="Inter,system-ui,sans-serif" font-size="9">stored</text>
+
+          <text x="460" y="41" text-anchor="middle" fill="#34d399" font-family="ui-monospace,SFMono-Regular,monospace" font-size="16">==</text>
+
+          <path d="M480 37 L520 37" stroke="rgba(52,211,153,0.19)" stroke-width="1.5"/>
+
+          <rect x="520" y="15" width="170" height="45" rx="8" fill="rgba(52,211,153,0.06)" stroke="#34d399" stroke-width="1"/>
+          <text x="605" y="35" text-anchor="middle" fill="#34d399" font-family="ui-monospace,SFMono-Regular,monospace" font-size="10" font-weight="600">SHA256(verifier)</text>
+          <text x="605" y="50" text-anchor="middle" fill="#9d9daa" font-family="Inter,system-ui,sans-serif" font-size="9">computed at /token</text>
+        </svg>
+      </div>
+      <p>The client sends a <strong>hashed</strong> version in step 2 and the <strong>original</strong> in step 18. An attacker who intercepts the authorization code can't use it without the original verifier. The <code>plain</code> method is disabled — only <code>S256</code>.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-p">CSRF STATE</span> DB-stored, 10-min TTL, single-use</summary>
+    <div class="det">
+      <p>Before redirecting to Discord, we generate a random state and store it in PostgreSQL with a 10-minute expiry. On callback, we look it up — if missing, expired, or wrong → reject. The row is deleted on first use, preventing replay.</p>
+      <pre><code>state = secrets.token_urlsafe(32)  // 43 chars
+INSERT INTO oauth_states (state, next_url, expires_at)
+VALUES (state, next_url, now() + interval '10 min')</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-g">SESSION RELAY</span> 60-second single-use code, not JWT in URL</summary>
+    <div class="det">
+      <p>JWTs in URLs leak through browser history, Referer headers, and server logs. Instead we redirect with a short-lived code that the frontend exchanges server-side for the actual JWT. Even if the code leaks, it's useless after 60 seconds or first use.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-r">REPLAY DETECTION</span> Auth code reuse → revoke everything</summary>
+    <div class="det">
+      <p>Authorization codes have a <code>used</code> flag. If someone tries to exchange an already-used code, we assume the code was stolen and <strong>revoke all tokens that were issued from it</strong>. This is per RFC 6819.</p>
+      <pre><code>if code.used == True:
+    // REPLAY ATTACK DETECTED
+    revoke all access_tokens where code_id = code.id
+    revoke all refresh_tokens where code_id = code.id
+    return 400 "invalid_grant"</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-b">REFRESH ROTATION</span> Family tracking + chain revocation</summary>
+    <div class="det">
+      <p>Every refresh token use produces a new token. All tokens in a chain share a <code>family_id</code>. If a previously-revoked refresh token is presented (stolen token being replayed), the entire family is revoked — attacker and legitimate user both lose access, forcing re-authentication.</p>
+      <pre><code>RT1 (family_id=abc) → used → RT2 (family_id=abc) → used → RT3 (family_id=abc)
+
+Attacker replays RT1:
+  RT1 is already revoked → THEFT DETECTED
+  → Revoke RT2, RT3, and all access tokens with family_id=abc</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-a">RS256 4096-BIT</span> Asymmetric token signing</summary>
+    <div class="det">
+      <p>Access tokens and ID tokens are signed with a 4096-bit RSA key. Anyone can verify tokens using the public key at <code>/.well-known/jwks.json</code> without calling our server. Key ID (<code>kid</code>) is derived from SHA256 of the DER-encoded public key (first 8 hex chars).</p>
+      <p style="margin-top:8px"><strong>Dev:</strong> Keys auto-generated to <code>backend/keys/</code> on first startup.<br><strong>Prod:</strong> Base64-encoded PEM in env vars (<code>OAUTH_RSA_PRIVATE_KEY</code>, <code>OAUTH_RSA_PUBLIC_KEY</code>).</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-p">TOKEN HASHING</span> SHA256 for tokens, bcrypt for secrets</summary>
+    <div class="det">
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Secret</th><th>Algorithm</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><code>client_secret</code></td><td>bcrypt (12 rounds)</td><td>Low entropy, user-facing. Needs salt + cost factor.</td></tr>
+            <tr><td><code>access_token</code></td><td>SHA256</td><td>High entropy (JWT). Fast lookup sufficient.</td></tr>
+            <tr><td><code>refresh_token</code></td><td>SHA256</td><td>High entropy (64 chars). Needs fast comparison for rotation.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-r">MEMBERSHIP GATE</span> Non-NS-members cannot proceed</summary>
+    <div class="det">
+      <p>After Discord login, backend calls the Discord API with the <strong>bot token</strong> to check if the user is in the NS guild. This isn't optional — non-members get a hard 403 and cannot create a session. The bot needs the <code>SERVER MEMBERS INTENT</code> enabled.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============================================================ -->
+<!-- 4. TOKENS                                                    -->
+<!-- ============================================================ -->
+<section id="tokens" class="sec">
+  <div class="sec-label">04</div>
+  <h2>Token types at a glance</h2>
+
+  <div class="cards cards-2">
+    <div class="card" style="border-left:3px solid var(--green)">
+      <h5 style="color:var(--green)">Access Token <span class="b b-g">RS256 JWT</span></h5>
+      <div class="tbl" style="margin-top:8px">
+        <table>
+          <tr><td>TTL</td><td><strong>1 hour</strong></td></tr>
+          <tr><td>Claims</td><td>sub, iss, aud, scope, iat, exp, jti</td></tr>
+          <tr><td>Stored as</td><td>SHA256 hash in <code>access_tokens</code></td></tr>
+          <tr><td>Verified via</td><td>JWKS endpoint or local public key</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--blue)">
+      <h5 style="color:var(--blue)">Refresh Token <span class="b b-b">OPAQUE</span></h5>
+      <div class="tbl" style="margin-top:8px">
+        <table>
+          <tr><td>TTL</td><td><strong>30 days</strong></td></tr>
+          <tr><td>Format</td><td>64 base64url chars</td></tr>
+          <tr><td>Stored as</td><td>SHA256 hash in <code>refresh_tokens</code></td></tr>
+          <tr><td>Rotation</td><td>New on every use, old revoked, family_id tracking</td></tr>
+          <tr><td>Requires</td><td><code>offline_access</code> scope</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--amber)">
+      <h5 style="color:var(--amber)">Session JWT <span class="b b-a">HS256</span></h5>
+      <div class="tbl" style="margin-top:8px">
+        <table>
+          <tr><td>TTL</td><td><strong>24 hours</strong></td></tr>
+          <tr><td>Claims</td><td>sub (user_id), exp, iat</td></tr>
+          <tr><td>Cookie</td><td><code>ns_session</code> (httponly)</td></tr>
+          <tr><td>SameSite</td><td>None+Secure (prod) / Lax (dev)</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--purple)">
+      <h5 style="color:var(--purple)">Auth Code <span class="b b-p">OPAQUE</span></h5>
+      <div class="tbl" style="margin-top:8px">
+        <table>
+          <tr><td>TTL</td><td><strong>10 minutes</strong></td></tr>
+          <tr><td>Format</td><td>128 chars (token_urlsafe(64))</td></tr>
+          <tr><td>Usage</td><td>Single-use. Replay → revoke all.</td></tr>
+          <tr><td>Bound to</td><td>user, app, scope, redirect_uri, PKCE challenge</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 5. SCOPES & DATA                                             -->
+<!-- ============================================================ -->
+<section id="data" class="sec">
+  <div class="sec-label">05</div>
+  <h2>Scopes & claims</h2>
+  <p class="intro">Scopes gate what data the client can access. Most data comes live from Discord — nothing is cached in our DB.</p>
+
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Scope</th><th>Claims returned</th><th>Source</th></tr></thead>
+      <tbody>
+        <tr><td><code>openid</code></td><td><code>sub</code></td><td><span class="b b-a">DB</span> User UUID</td></tr>
+        <tr><td><code>email</code></td><td><code>email</code>, <code>email_verified</code></td><td><span class="b b-a">DB</span> Stored at first login</td></tr>
+        <tr><td><code>profile</code></td><td><code>name</code>, <code>picture</code>, <code>discord_username</code>, <code>banner_url</code>, <code>accent_color</code>, <code>public_badges</code></td><td><span class="b b-p">Discord Live</span> 5-min cache</td></tr>
+        <tr><td><code>roles</code></td><td><code>roles</code> (array of role names)</td><td><span class="b b-p">Discord Live</span> 5-min cache</td></tr>
+        <tr><td><code>date_joined</code></td><td><code>date_joined</code>, <code>discord_joined_at</code>, <code>boosting_since</code></td><td><span class="b b-a">DB</span> + <span class="b b-p">Discord</span></td></tr>
+        <tr><td><code>offline_access</code></td><td>—</td><td>Enables refresh tokens. No claims.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <details style="margin-top:16px">
+    <summary>How does the Discord data cache work?</summary>
+    <div class="det">
+      <p>On every <code>/oauth/userinfo</code> call, the backend fetches the user's Discord profile using the <strong>bot token</strong> (not the user's OAuth token). Results are cached in an in-memory LRU cache:</p>
+      <div class="tbl" style="margin-top:8px">
+        <table>
+          <tr><td>Cache type</td><td>In-memory LRU (<code>cachetools.TTLCache</code>)</td></tr>
+          <tr><td>Max entries</td><td>1,000</td></tr>
+          <tr><td>TTL</td><td>5 minutes</td></tr>
+          <tr><td>Key</td><td>Discord user ID</td></tr>
+        </table>
+      </div>
+      <p style="margin-top:8px">This means role changes, avatar updates, etc. are reflected within 5 minutes. The cache is per-process (not shared across instances).</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============================================================ -->
+<!-- 6. DATABASE                                                  -->
+<!-- ============================================================ -->
+<section id="db" class="sec">
+  <div class="sec-label">06</div>
+  <h2>Database schema</h2>
+  <p class="intro">PostgreSQL <code>oauth_provider</code> — 9 tables. Click any table to expand.</p>
+
+  <details>
+    <summary><span class="b b-a">users</span> Minimal identity — all profile data is live from Discord</summary>
+    <div class="det">
+      <div class="schema">
+        <div class="schema-row"><span class="n">id</span><span class="t">UUID</span><span class="d">PK, auto uuid4</span></div>
+        <div class="schema-row"><span class="n">discord_id</span><span class="t">VARCHAR</span><span class="d">Unique, indexed</span></div>
+        <div class="schema-row"><span class="n">email</span><span class="t">VARCHAR</span><span class="d">From Discord OAuth</span></div>
+        <div class="schema-row"><span class="n">is_admin</span><span class="t">BOOLEAN</span><span class="d">Default false</span></div>
+        <div class="schema-row"><span class="n">created_at</span><span class="t">TIMESTAMP</span><span class="d">Used as date_joined</span></div>
+        <div class="schema-row"><span class="n">updated_at</span><span class="t">TIMESTAMP</span><span class="d">Auto on update</span></div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-b">oauth_apps</span> Registered client applications</summary>
+    <div class="det">
+      <div class="schema">
+        <div class="schema-row"><span class="n">id</span><span class="t">UUID</span><span class="d">PK</span></div>
+        <div class="schema-row"><span class="n">name</span><span class="t">VARCHAR</span><span class="d">App display name</span></div>
+        <div class="schema-row"><span class="n">client_id</span><span class="t">VARCHAR</span><span class="d">Unique, 32 hex chars</span></div>
+        <div class="schema-row"><span class="n">client_secret_hash</span><span class="t">VARCHAR</span><span class="d">bcrypt (12 rounds)</span></div>
+        <div class="schema-row"><span class="n">redirect_uris</span><span class="t">JSON</span><span class="d">Array of allowed URIs</span></div>
+        <div class="schema-row"><span class="n">scopes</span><span class="t">JSON</span><span class="d">Array of allowed scopes</span></div>
+        <div class="schema-row"><span class="n">owner_id</span><span class="t">UUID</span><span class="d">FK → users.id</span></div>
+        <div class="schema-row"><span class="n">icon_url</span><span class="t">VARCHAR</span><span class="d">Optional</span></div>
+        <div class="schema-row"><span class="n">created_at</span><span class="t">TIMESTAMP</span><span class="d">Auto</span></div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-g">access_tokens</span> SHA256-hashed RS256 JWTs</summary>
+    <div class="det">
+      <div class="schema">
+        <div class="schema-row"><span class="n">id</span><span class="t">UUID</span><span class="d">PK</span></div>
+        <div class="schema-row"><span class="n">token_hash</span><span class="t">VARCHAR</span><span class="d">SHA256(JWT), unique</span></div>
+        <div class="schema-row"><span class="n">jti</span><span class="t">VARCHAR</span><span class="d">JWT ID, unique</span></div>
+        <div class="schema-row"><span class="n">user_id</span><span class="t">UUID</span><span class="d">FK → users (nullable for client_credentials)</span></div>
+        <div class="schema-row"><span class="n">app_id</span><span class="t">UUID</span><span class="d">FK → oauth_apps</span></div>
+        <div class="schema-row"><span class="n">scope</span><span class="t">VARCHAR</span><span class="d">Space-separated</span></div>
+        <div class="schema-row"><span class="n">expires_at</span><span class="t">TIMESTAMP</span><span class="d">1h from issuance</span></div>
+        <div class="schema-row"><span class="n">revoked</span><span class="t">BOOLEAN</span><span class="d">Default false</span></div>
+        <div class="schema-row"><span class="n">created_at</span><span class="t">TIMESTAMP</span><span class="d">Auto</span></div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-b">refresh_tokens</span> Family-tracked rotation chain</summary>
+    <div class="det">
+      <div class="schema">
+        <div class="schema-row"><span class="n">id</span><span class="t">UUID</span><span class="d">PK</span></div>
+        <div class="schema-row"><span class="n">token_hash</span><span class="t">VARCHAR</span><span class="d">SHA256(token), unique</span></div>
+        <div class="schema-row"><span class="n">family_id</span><span class="t">UUID</span><span class="d">Links rotation chain</span></div>
+        <div class="schema-row"><span class="n">user_id</span><span class="t">UUID</span><span class="d">FK → users</span></div>
+        <div class="schema-row"><span class="n">app_id</span><span class="t">UUID</span><span class="d">FK → oauth_apps</span></div>
+        <div class="schema-row"><span class="n">scope</span><span class="t">VARCHAR</span><span class="d">Space-separated</span></div>
+        <div class="schema-row"><span class="n">expires_at</span><span class="t">TIMESTAMP</span><span class="d">30 days</span></div>
+        <div class="schema-row"><span class="n">revoked</span><span class="t">BOOLEAN</span><span class="d">Default false</span></div>
+        <div class="schema-row"><span class="n">created_at</span><span class="t">TIMESTAMP</span><span class="d">Auto</span></div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-p">authorization_codes</span> One-time PKCE-bound codes</summary>
+    <div class="det">
+      <div class="schema">
+        <div class="schema-row"><span class="n">id</span><span class="t">UUID</span><span class="d">PK</span></div>
+        <div class="schema-row"><span class="n">code</span><span class="t">VARCHAR</span><span class="d">128 chars, unique</span></div>
+        <div class="schema-row"><span class="n">user_id</span><span class="t">UUID</span><span class="d">FK → users</span></div>
+        <div class="schema-row"><span class="n">app_id</span><span class="t">UUID</span><span class="d">FK → oauth_apps</span></div>
+        <div class="schema-row"><span class="n">redirect_uri</span><span class="t">VARCHAR</span><span class="d">Must match on exchange</span></div>
+        <div class="schema-row"><span class="n">scope</span><span class="t">VARCHAR</span><span class="d">Granted scopes</span></div>
+        <div class="schema-row"><span class="n">code_challenge</span><span class="t">VARCHAR</span><span class="d">PKCE S256</span></div>
+        <div class="schema-row"><span class="n">code_challenge_method</span><span class="t">VARCHAR</span><span class="d">Always "S256"</span></div>
+        <div class="schema-row"><span class="n">used</span><span class="t">BOOLEAN</span><span class="d">Replay detection</span></div>
+        <div class="schema-row"><span class="n">expires_at</span><span class="t">TIMESTAMP</span><span class="d">10 min</span></div>
+        <div class="schema-row"><span class="n">nonce</span><span class="t">VARCHAR</span><span class="d">OIDC nonce (optional)</span></div>
+        <div class="schema-row"><span class="n">created_at</span><span class="t">TIMESTAMP</span><span class="d">Auto</span></div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-r">oauth_states</span> CSRF protection (10-min, single-use)</summary>
+    <div class="det">
+      <div class="schema">
+        <div class="schema-row"><span class="n">id</span><span class="t">UUID</span><span class="d">PK</span></div>
+        <div class="schema-row"><span class="n">state</span><span class="t">VARCHAR</span><span class="d">43 chars, unique</span></div>
+        <div class="schema-row"><span class="n">next_url</span><span class="t">VARCHAR</span><span class="d">Post-login redirect</span></div>
+        <div class="schema-row"><span class="n">expires_at</span><span class="t">TIMESTAMP</span><span class="d">10 min TTL</span></div>
+        <div class="schema-row"><span class="n">created_at</span><span class="t">TIMESTAMP</span><span class="d">Auto</span></div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-g">session_codes</span> 60-second relay codes</summary>
+    <div class="det">
+      <div class="schema">
+        <div class="schema-row"><span class="n">id</span><span class="t">UUID</span><span class="d">PK</span></div>
+        <div class="schema-row"><span class="n">code</span><span class="t">VARCHAR</span><span class="d">43 chars, unique</span></div>
+        <div class="schema-row"><span class="n">user_id</span><span class="t">UUID</span><span class="d">FK → users</span></div>
+        <div class="schema-row"><span class="n">used</span><span class="t">BOOLEAN</span><span class="d">Single-use flag</span></div>
+        <div class="schema-row"><span class="n">expires_at</span><span class="t">TIMESTAMP</span><span class="d">60s TTL</span></div>
+        <div class="schema-row"><span class="n">created_at</span><span class="t">TIMESTAMP</span><span class="d">Auto</span></div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-a">scope_definitions</span> + <span class="b b-p">claim_definitions</span> Configurable registry</summary>
+    <div class="det">
+      <p style="margin-bottom:8px"><strong>scope_definitions:</strong> name, description, claims (JSON array)</p>
+      <p><strong>claim_definitions:</strong> name, description, source ("system" or "discord"). Note: <code>created_at</code> has no server default — must be explicit in INSERTs.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============================================================ -->
+<!-- 7. ERRORS                                                    -->
+<!-- ============================================================ -->
+<section id="errors" class="sec">
+  <div class="sec-label">07</div>
+  <h2>Error paths</h2>
+  <p class="intro">What can go wrong and what the system does about it.</p>
+
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Error</th><th>When</th><th>HTTP</th><th>Consequence</th></tr></thead>
+      <tbody>
+        <tr><td><code>invalid_client</code></td><td>Wrong client_id or secret</td><td>401</td><td>Rejected. No timing leak (bcrypt constant-time).</td></tr>
+        <tr><td><code>invalid_grant</code></td><td>Code expired, used, or PKCE mismatch</td><td>400</td><td>If code was already used → <strong>revoke all tokens from that code</strong>.</td></tr>
+        <tr><td><code>invalid_scope</code></td><td>Scope not in app's allowed list</td><td>400</td><td>Rejected with invalid scope names.</td></tr>
+        <tr><td><code>access_denied</code></td><td>User clicks "Deny"</td><td>—</td><td>Redirect to client with <code>error=access_denied</code>.</td></tr>
+        <tr><td><code>invalid_state</code></td><td>CSRF state mismatch</td><td>400</td><td>Callback rejected. Possible CSRF attack.</td></tr>
+        <tr><td><code>not_ns_member</code></td><td>User not in NS Discord</td><td>403</td><td>Hard stop. Cannot create session.</td></tr>
+        <tr><td><code>token_exchange_failed</code></td><td>Discord code exchange fails</td><td>502</td><td>Discord may be down or code expired.</td></tr>
+        <tr><td><code>invalid_code</code></td><td>Session code bad/expired/used</td><td>400</td><td>Must re-authenticate via Discord.</td></tr>
+        <tr><td><code>invalid_token</code></td><td>Bearer token expired or revoked</td><td>401</td><td>Client must refresh or re-authorize.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 8. API                                                       -->
+<!-- ============================================================ -->
+<section id="api" class="sec">
+  <div class="sec-label">08</div>
+  <h2>API reference</h2>
+  <p class="intro">Every endpoint, grouped by function. Click to see request/response examples.</p>
+
+  <h3 style="margin-top:24px;margin-bottom:12px;color:var(--amber)">OAuth</h3>
+
+  <details>
+    <summary><span class="b b-g">GET</span> <code>/oauth/authorize</code> — Start authorization flow</summary>
+    <div class="det">
+      <p>Params: <code>response_type=code</code>, <code>client_id</code>, <code>redirect_uri</code>, <code>scope</code>, <code>state</code>, <code>code_challenge</code>, <code>code_challenge_method=S256</code>, <code>nonce</code> (optional).</p>
+      <p style="margin-top:6px">→ 302 to frontend <code>/login</code> (no session) or <code>/consent</code> (has session).</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-b">POST</span> <code>/oauth/token</code> — Exchange code / refresh / client_credentials</summary>
+    <div class="det">
+      <pre><code>// Authorization code grant
+POST /oauth/token
+grant_type=authorization_code&code=...&redirect_uri=...&code_verifier=...&client_id=...&client_secret=...
+
+// Response
+{ "access_token": "eyJ...", "token_type": "Bearer", "expires_in": 3600,
+  "refresh_token": "...", "id_token": "eyJ...", "scope": "openid profile" }
+
+// Refresh grant
+grant_type=refresh_token&refresh_token=...&client_id=...&client_secret=...
+
+// Client credentials (no user context)
+grant_type=client_credentials&client_id=...&client_secret=...&scope=openid</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-g">GET</span> <code>/oauth/userinfo</code> — Get user data (Bearer token)</summary>
+    <div class="det">
+      <pre><code>GET /oauth/userinfo
+Authorization: Bearer eyJ...
+
+// Response (depends on granted scopes)
+{ "sub": "uuid", "email": "user@example.com", "name": "Display Name",
+  "picture": "https://cdn.discordapp.com/avatars/...",
+  "roles": ["Member", "Builder"], "discord_username": "user#0001" }</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-b">POST</span> <code>/oauth/revoke</code> — Revoke a token (always 200)</summary>
+    <div class="det">
+      <pre><code>POST /oauth/revoke
+token=...&token_type_hint=access_token&client_id=...&client_secret=...</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-b">POST</span> <code>/oauth/introspect</code> — Check if token is active</summary>
+    <div class="det">
+      <pre><code>POST /oauth/introspect
+token=...&client_id=...&client_secret=...
+
+// Active:  { "active": true, "sub": "...", "scope": "...", "exp": ... }
+// Expired: { "active": false }</code></pre>
+    </div>
+  </details>
+
+  <h3 style="margin-top:32px;margin-bottom:12px;color:var(--purple)">Authentication</h3>
+
+  <details>
+    <summary><span class="b b-g">GET</span> <code>/auth/discord</code> — Start Discord login</summary>
+    <div class="det">
+      <p>Param: <code>next</code> (post-login redirect URL). Generates CSRF state → stores in DB → 302 to Discord OAuth2.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-g">GET</span> <code>/auth/discord/callback</code> — Discord OAuth2 callback</summary>
+    <div class="det">
+      <p>Discord redirects here with <code>code</code> + <code>state</code>. Validates state, exchanges code, fetches profile, checks guild membership, provisions user, creates session code, 302 to frontend.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-b">POST</span> <code>/auth/session/exchange</code> — Code → JWT</summary>
+    <div class="det">
+      <pre><code>POST /auth/session/exchange
+{ "code": "...43chars..." }
+
+// Response: { "token": "eyJ..." }
+// Also sets ns_session httponly cookie</code></pre>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="b b-g">GET</span> <code>/auth/me</code> — Current user from session cookie</summary>
+    <div class="det">
+      <pre><code>// With cookie: { "id": "uuid", "discord_id": "123", "email": "...", "is_admin": false }
+// Without:    { }</code></pre>
+    </div>
+  </details>
+
+  <h3 style="margin-top:32px;margin-bottom:12px;color:var(--green)">Discovery</h3>
+
+  <details>
+    <summary><span class="b b-g">GET</span> <code>/.well-known/openid-configuration</code></summary>
+    <div class="det"><p>Standard OIDC discovery document. Lists all endpoints, supported grant types, scopes, and signing algorithms.</p></div>
+  </details>
+
+  <details>
+    <summary><span class="b b-g">GET</span> <code>/.well-known/jwks.json</code></summary>
+    <div class="det"><p>RSA public key in JWK format. <code>kid</code> = first 8 hex chars of SHA256(DER public key).</p></div>
+  </details>
+</section>
+
+</div><!-- wrap -->
+
+<footer>
+  <p style="color:var(--text3)">NS Auth Engineering Reference — Network School</p>
+  <p style="margin-top:6px;color:var(--text3);font-size:11px">Internal document for the engineering team.</p>
+</footer>
+
+<script>
+const obs = new IntersectionObserver(e => e.forEach(x => { if(x.isIntersecting) x.target.classList.add('vis') }), {threshold:.08});
+document.querySelectorAll('.sec').forEach(s => obs.observe(s));
+const secs = document.querySelectorAll('section[id]');
+const links = document.querySelectorAll('.toc-row a');
+addEventListener('scroll', () => {
+  let c = '';
+  secs.forEach(s => { if(scrollY >= s.offsetTop - 80) c = s.id });
+  links.forEach(a => { a.classList.toggle('active', a.getAttribute('href') === '#' + c) });
+});
+</script>
+</body>
+</html>
