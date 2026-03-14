@@ -5,6 +5,7 @@ type GenerateInputsParams = {
   pubkey: JsonWebKey;
   shaPrecomputeTillKeys?: string[];
   maxSignedDataLength: number;
+  modBits?: number; // RSA modulus bit size (default: auto-detected from pubkey, falls back to 2048)
 }
 
 type JWTCircuitInputs = {
@@ -37,6 +38,7 @@ export async function generateInputs({
   pubkey,
   shaPrecomputeTillKeys,
   maxSignedDataLength, // when using partial hash, this will be the length of data after partial hash
+  modBits: modBitsParam,
 }: GenerateInputsParams) {
   // Parse token
   const [headerB64, payloadB64] = jwt.split(".");
@@ -64,12 +66,16 @@ export async function generateInputs({
     .split("")
     .map(c => c.charCodeAt(0).toString(16).padStart(2, "0"))
     .join(""));
-  const redcParam = (1n << (2n * 2048n + 4n)) / pubkeyBigInt; // something needed by the noir big-num lib
+  // Auto-detect RSA key size from modulus bit length, or use explicit override
+  const modBits = modBitsParam ?? (pubkeyBigInt.toString(2).length <= 2048 ? 2048 : 4096);
+  const numLimbs = Math.ceil(modBits / 120);
+
+  const redcParam = (1n << (2n * BigInt(modBits) + 6n)) / pubkeyBigInt; // Barrett reduction parameter for noir-bignum v0.9.2+ (BARRETT_REDUCTION_OVERFLOW_BITS=6)
 
   const inputs: Partial<JWTCircuitInputs> = {
-    pubkey_modulus_limbs: splitBigIntToChunks(pubkeyBigInt, 120, 18).map(s => s.toString()),
-    redc_params_limbs: splitBigIntToChunks(redcParam, 120, 18).map(s => s.toString()),
-    signature_limbs: splitBigIntToChunks(signatureBigInt, 120, 18).map(s => s.toString()),
+    pubkey_modulus_limbs: splitBigIntToChunks(pubkeyBigInt, 120, numLimbs).map(s => s.toString()),
+    redc_params_limbs: splitBigIntToChunks(redcParam, 120, numLimbs).map(s => s.toString()),
+    signature_limbs: splitBigIntToChunks(signatureBigInt, 120, numLimbs).map(s => s.toString()),
   };
 
   if (!shaPrecomputeTillKeys || shaPrecomputeTillKeys.length === 0) {

@@ -107,7 +107,7 @@ impl<let MAX_DATA_LENGTH: u32, let NUM_LIMBS: u32, let MOD_BITS: u32> JWT<MAX_DA
         if (!self.is_partial_hash) {
             // this is a compile time conditional
             // Hash the data using SHA256
-            data_hash = sha256_var(self.data.storage(), self.data.len() as u64);
+            data_hash = sha256_var(self.data.storage(), self.data.len());
         } else {
             // Compute the full SHA256 hash with the given partial hash
             data_hash = partial_sha256_var_end(
