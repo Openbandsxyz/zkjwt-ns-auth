@@ -1,0 +1,33 @@
+{
+  "name": "zk-nsauth-sdk",
+  "version": "0.1.0",
+  "description": "SDK for generating and verifying ZK proofs of NS-Auth membership",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:dev": "tsc --watch"
+  },
+  "keywords": [
+    "zk",
+    "noir",
+    "jwt",
+    "ns-auth",
+    "zero-knowledge"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@noir-lang/noir_js": "^1.0.0-beta.3",
+    "@noir-lang/backend_barretenberg": "^1.0.0-beta.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
